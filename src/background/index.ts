@@ -8,11 +8,12 @@ import {
   handleRoundTrip,
   isEnvelope,
   newRequestId,
+  noLightFallback,
+  selectLightResponse,
   type Envelope,
   type RoundTripPayload,
 } from "../messaging/index.js";
 import { DIM_URL_PATTERNS } from "../shared/dim.js";
-import { selectLightResponse } from "./relay.js";
 import {
   handleTrashGet,
   handleTrashStage,
@@ -93,13 +94,7 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
         if (lightRes && lightRes.kind === "vault-result") {
           sendResponse(lightRes);
         } else {
-          sendResponse(
-            createEnvelope("vault-result", message.requestId, {
-              state: "empty",
-              reason: "no-light",
-              message: "Open DIM logged in (no Light content script on a DIM tab).",
-            }),
-          );
+          sendResponse(noLightFallback(message) ?? createEnvelope("error", message.requestId));
         }
         return;
       }
@@ -109,17 +104,7 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
         if (lightRes && lightRes.kind === "filter-result") {
           sendResponse(lightRes);
         } else {
-          sendResponse(
-            createEnvelope("filter-result", message.requestId, {
-              ok: false,
-              query:
-                message.kind === "filter-apply"
-                  ? String((message.payload as { query?: string } | undefined)?.query ?? "")
-                  : "",
-              applied: false,
-              error: "Open DIM inventory (Light not reachable).",
-            }),
-          );
+          sendResponse(noLightFallback(message) ?? createEnvelope("error", message.requestId));
         }
         return;
       }
