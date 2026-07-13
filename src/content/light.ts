@@ -108,14 +108,13 @@ try {
   channel.addEventListener("message", (event: MessageEvent) => {
     const data = event.data as { type?: string } | undefined;
     if (data?.type === "stores-updated" || data?.type === "item-moved") {
+      const payload: LightStatusPayload = {
+        present: true,
+        href: location.href,
+        inventoryHint: data.type,
+      };
       void browser.runtime
-        .sendMessage(
-          createEnvelope("light-status", newRequestId(), {
-            present: true,
-            href: location.href,
-            inventoryHint: data.type,
-          }),
-        )
+        .sendMessage(createEnvelope("light-status", newRequestId(), payload))
         .catch(() => undefined);
     }
   });

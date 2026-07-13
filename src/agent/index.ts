@@ -17,7 +17,6 @@ export {
 export {
   runAgent,
   createAgentController,
-  AgentCancelledError,
   type FetchFn,
   type RunAgentOptions,
 } from "./run.js";

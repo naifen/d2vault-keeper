@@ -36,16 +36,19 @@ async function queryDimTabs(): Promise<browser.tabs.Tab[]> {
 
 async function relayToLight(message: Envelope): Promise<Envelope | undefined> {
   const tabs = await queryDimTabs();
-  const responses: Array<Envelope | undefined> = [];
-  for (const tab of tabs) {
-    if (tab.id === undefined) continue;
-    try {
-      const response = (await browser.tabs.sendMessage(tab.id, message)) as unknown;
-      responses.push(isEnvelope(response) ? response : undefined);
-    } catch {
-      // Tab may not have content script yet; try next.
-    }
-  }
+  // Independent tabs — query in parallel; selectLightResponse picks best result.
+  const responses = await Promise.all(
+    tabs.map(async (tab): Promise<Envelope | undefined> => {
+      if (tab.id === undefined) return undefined;
+      try {
+        const response: unknown = await browser.tabs.sendMessage(tab.id, message);
+        return isEnvelope(response) ? response : undefined;
+      } catch {
+        // Tab may not have content script yet.
+        return undefined;
+      }
+    }),
+  );
   return selectLightResponse(message, responses);
 }
 

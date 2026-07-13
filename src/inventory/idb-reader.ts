@@ -153,7 +153,11 @@ export function createBrowserIdbKeyval(
             resolve(db);
           };
         });
-      })();
+      })().catch((err) => {
+        // Allow retry after transient missing-DB (DIM not warm yet).
+        dbPromise = null;
+        throw err;
+      });
     }
     return dbPromise;
   }
