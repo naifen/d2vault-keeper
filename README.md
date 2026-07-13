@@ -6,7 +6,7 @@ Domain glossary: [`CONTEXT.md`](./CONTEXT.md).
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 24+ (LTS floor; see `engines` in package.json)
 - Firefox 121+ (for temporary add-on load)
 
 ## Develop

@@ -38,7 +38,7 @@ graph TD
 
 | Job Name | Purpose | Dependencies | Execution Context |
 |----------|---------|--------------|-------------------|
-| ci | Install, typecheck, test, build, package smoke | none | ubuntu-latest, Node LTS ≥ project engines |
+| ci | Install, typecheck, test, build, package smoke | none | ubuntu-latest, Node 24 LTS (matches engines ≥24) |
 
 ## Requirements Matrix
 
@@ -74,7 +74,7 @@ graph TD
 
 ```yaml
 # Environment Variables
-NODE_VERSION: string  # Purpose: major Node version meeting package engines (≥20)
+NODE_VERSION: string  # Purpose: major Node version meeting package engines (≥24); CI pins 24 LTS
 
 # Repository Triggers
 paths: []  # all paths (extension is small; full suite always)
@@ -214,6 +214,7 @@ package_zip: file     # artifacts/vault-keeper.zip when package step runs
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
 | 1.0 | 2026-07-13 | Initial CI gates: install, typecheck, test, build, package | Agent |
+| 1.1 | 2026-07-13 | Node pin 24 LTS; engines ≥24; toolchain TS 7 / Vitest 4 | Agent |
 
 ## Related Specifications
 
