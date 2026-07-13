@@ -113,6 +113,21 @@ describe("createWorkbenchClient", () => {
     expect(out.items).toEqual([normal]);
   });
 
+  it("loadTrash falls back to emptyTrashState when payload omits state", async () => {
+    const send: RuntimeSend = async (msg) =>
+      createEnvelope("trash-result", msg.requestId, {
+        ok: true,
+        action: "get",
+        // deliberately omit state — client must use canonical emptyTrashState
+      } as { ok: true; action: "get" });
+    const client = createWorkbenchClient(send);
+    const out = await client.loadTrash();
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.state).toEqual(emptyTrashState());
+    expect(out.items).toEqual([]);
+  });
+
   it("applyFilter surfaces error from filter-result", async () => {
     const send: RuntimeSend = async (msg) =>
       createEnvelope("filter-result", msg.requestId, {

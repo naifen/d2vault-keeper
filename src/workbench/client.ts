@@ -4,14 +4,22 @@
  */
 
 import {
-  createEnvelope,
+  createTypedEnvelope,
   isEnvelope,
   newRequestId,
+  type AgentResultPayload,
   type Envelope,
+  type FilterResultPayload,
   type RoundTripResultPayload,
+  type TrashResultPayload,
 } from "../messaging/index.js";
 import type { InventoryStatus, VaultItem } from "../inventory/index.js";
-import type { StageCandidate, TrashRecord, TrashState } from "../trash/index.js";
+import {
+  emptyTrashState,
+  type StageCandidate,
+  type TrashRecord,
+  type TrashState,
+} from "../trash/index.js";
 import {
   buildAgentRequest,
   type AgentRecommendation,
@@ -59,26 +67,8 @@ function bad(error: string): ClientErr {
   return { ok: false, error };
 }
 
-function asTrashPayload(payload: unknown): {
-  ok?: boolean;
-  error?: string;
-  state?: TrashState;
-  result?: { staged: TrashRecord[]; denied: Array<{ id: string; reason: string }> };
-  removed?: TrashRecord[];
-  repaired?: TrashRecord[];
-} {
-  return (payload ?? {}) as {
-    ok?: boolean;
-    error?: string;
-    state?: TrashState;
-    result?: { staged: TrashRecord[]; denied: Array<{ id: string; reason: string }> };
-    removed?: TrashRecord[];
-    repaired?: TrashRecord[];
-  };
-}
-
-function trashFailed(payload: { ok?: boolean; error?: string }, fallback: string): ClientErr | null {
-  if (payload.ok === false) return bad(payload.error ?? fallback);
+function trashFailed(payload: TrashResultPayload | undefined, fallback: string): ClientErr | null {
+  if (payload?.ok === false) return bad(payload.error ?? fallback);
   return null;
 }
 
@@ -87,7 +77,7 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
     async ping() {
       try {
         const res = await send(
-          createEnvelope("ping", newRequestId(), { from: "workbench", at: Date.now() }),
+          createTypedEnvelope("ping", newRequestId(), { from: "workbench", at: Date.now() }),
         );
         return isEnvelope(res) && res.kind === "pong";
       } catch {
@@ -98,7 +88,7 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
     async roundTrip(token: string) {
       try {
         const res = await send(
-          createEnvelope("roundtrip", newRequestId(), { token, hop: "workbench" }),
+          createTypedEnvelope("roundtrip", newRequestId(), { token, hop: "workbench" }),
         );
         if (!isEnvelope(res) || res.kind !== "roundtrip-result") {
           return bad("bad response");
@@ -115,15 +105,16 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
 
     async loadVault() {
       try {
-        const res = await send(createEnvelope("vault-get", newRequestId()));
+        const res = await send(createTypedEnvelope("vault-get", newRequestId()));
         if (!isEnvelope(res) || res.kind !== "vault-result") {
           return bad("bad response");
         }
-        const status = res.payload as InventoryStatus;
+        const status = res.payload as InventoryStatus | undefined;
+        if (!status) return bad("bad response");
         if (status.state === "ok") {
           return { ok: true, status, items: status.items };
         }
-        return { ok: true, status, items: [] as VaultItem[] };
+        return { ok: true, status, items: [] };
       } catch (err) {
         return bad(String(err));
       }
@@ -131,14 +122,14 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
 
     async loadTrash() {
       try {
-        const res = await send(createEnvelope("trash-get", newRequestId()));
+        const res = await send(createTypedEnvelope("trash-get", newRequestId()));
         if (!isEnvelope(res) || res.kind !== "trash-result") {
           return bad("Trash load failed");
         }
-        const payload = asTrashPayload(res.payload);
+        const payload = res.payload as TrashResultPayload | undefined;
         const fail = trashFailed(payload, "Trash load failed");
         if (fail) return fail;
-        const state = payload.state ?? { version: 1 as const, items: [] };
+        const state = payload?.state ?? emptyTrashState();
         return { ok: true, items: state.items, state };
       } catch (err) {
         return bad(String(err));
@@ -152,20 +143,20 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
       }
       try {
         const res = await send(
-          createEnvelope("trash-stage", newRequestId(), { candidates }),
+          createTypedEnvelope("trash-stage", newRequestId(), { candidates }),
         );
         if (!isEnvelope(res) || res.kind !== "trash-result") {
           return bad("Stage failed");
         }
-        const payload = asTrashPayload(res.payload);
+        const payload = res.payload as TrashResultPayload | undefined;
         const fail = trashFailed(payload, "Stage failed");
         if (fail) return fail;
-        const items = payload.state?.items ?? [];
+        const items = payload?.state?.items ?? [];
         return {
           ok: true,
           items,
-          staged: payload.result?.staged ?? [],
-          denied: payload.result?.denied ?? [],
+          staged: payload?.result?.staged ?? [],
+          denied: payload?.result?.denied ?? [],
           candidates,
         };
       } catch (err) {
@@ -178,17 +169,17 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
         return bad("Select Trash items to unstage");
       }
       try {
-        const res = await send(createEnvelope("trash-unstage", newRequestId(), { ids }));
+        const res = await send(createTypedEnvelope("trash-unstage", newRequestId(), { ids }));
         if (!isEnvelope(res) || res.kind !== "trash-result") {
           return bad("Unstage failed");
         }
-        const payload = asTrashPayload(res.payload);
+        const payload = res.payload as TrashResultPayload | undefined;
         const fail = trashFailed(payload, "Unstage failed");
         if (fail) return fail;
         return {
           ok: true,
-          items: payload.state?.items ?? [],
-          removed: payload.removed ?? [],
+          items: payload?.state?.items ?? [],
+          removed: payload?.removed ?? [],
         };
       } catch (err) {
         return bad(String(err));
@@ -198,17 +189,12 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
     async applyFilter(query) {
       try {
         const res = await send(
-          createEnvelope("filter-apply", newRequestId(), { query }),
+          createTypedEnvelope("filter-apply", newRequestId(), { query }),
         );
         if (!isEnvelope(res) || res.kind !== "filter-result") {
           return bad("Apply failed: bad response");
         }
-        const payload = res.payload as {
-          ok?: boolean;
-          applied?: boolean;
-          error?: string;
-          query?: string;
-        };
+        const payload = res.payload as FilterResultPayload | undefined;
         if (payload?.ok && payload.applied) {
           return { ok: true, query: payload.query || query, applied: true };
         }
@@ -220,11 +206,11 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
 
     async clearFilter() {
       try {
-        const res = await send(createEnvelope("filter-clear", newRequestId()));
+        const res = await send(createTypedEnvelope("filter-clear", newRequestId()));
         if (!isEnvelope(res) || res.kind !== "filter-result") {
           return bad("Clear failed: bad response");
         }
-        const payload = res.payload as { ok?: boolean; applied?: boolean; error?: string };
+        const payload = res.payload as FilterResultPayload | undefined;
         if (payload?.ok && payload.applied) {
           return { ok: true, applied: true };
         }
@@ -236,17 +222,17 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
 
     async repairMirror() {
       try {
-        const res = await send(createEnvelope("trash-repair-mirror", newRequestId()));
+        const res = await send(createTypedEnvelope("trash-repair-mirror", newRequestId()));
         if (!isEnvelope(res) || res.kind !== "trash-result") {
           return bad("Repair Mirror failed");
         }
-        const payload = asTrashPayload(res.payload);
+        const payload = res.payload as TrashResultPayload | undefined;
         const fail = trashFailed(payload, "Repair Mirror failed");
         if (fail) return fail;
         return {
           ok: true,
-          items: payload.state?.items ?? [],
-          repaired: payload.repaired ?? [],
+          items: payload?.state?.items ?? [],
+          repaired: payload?.repaired ?? [],
         };
       } catch (err) {
         return bad(String(err));
@@ -260,7 +246,7 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
       }
       try {
         const res = await send(
-          createEnvelope("agent-settings-set", newRequestId(), { apiKey: trimmed }),
+          createTypedEnvelope("agent-settings-set", newRequestId(), { apiKey: trimmed }),
         );
         if (isEnvelope(res) && res.kind === "agent-settings-result") {
           return { ok: true, saved: true };
@@ -282,21 +268,16 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
       });
 
       try {
-        const res = await send(createEnvelope("agent-run", newRequestId(), payload));
+        const res = await send(createTypedEnvelope("agent-run", newRequestId(), payload));
         if (!isEnvelope(res) || res.kind !== "agent-result") {
           return bad("Agent failed: bad response");
         }
-        const body = res.payload as {
-          ok?: boolean;
-          cancelled?: boolean;
-          error?: string;
-          result?: AgentResult;
-        };
-        if (body.cancelled) {
+        const body = res.payload as AgentResultPayload | undefined;
+        if (body?.cancelled) {
           return bad("cancelled");
         }
-        if (!body.ok || !body.result) {
-          return bad(body.error ?? "Agent failed");
+        if (!body?.ok || !body.result) {
+          return bad(body?.error ?? "Agent failed");
         }
         return { ok: true, result: body.result };
       } catch (err) {
@@ -306,7 +287,7 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
 
     async cancelAgent() {
       try {
-        await send(createEnvelope("agent-cancel", newRequestId()));
+        await send(createTypedEnvelope("agent-cancel", newRequestId()));
       } catch {
         // Best-effort cancel — UI still shows cancel requested.
       }

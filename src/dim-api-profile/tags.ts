@@ -99,7 +99,7 @@ export function mutateDimApiProfileTag(
     if (!hadEntry) {
       return { next: raw ?? root, changed: false };
     }
-    if (existing.tag === JUNK_TAG || existing.tag === "junk") {
+    if (existing.tag === JUNK_TAG) {
       delete existing.tag;
     } else if (existing.tag !== undefined) {
       return { next: raw ?? root, changed: false };

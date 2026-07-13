@@ -17,8 +17,6 @@ export interface DimApiProfileMutatorOptions {
   destinyVersion?: number;
 }
 
-export { mutateDimApiProfileTag, DIM_API_PROFILE_KEY };
-
 export function createIdbTagHooks(options: DimApiProfileMutatorOptions): TagDomHooks {
   const destinyVersion = options.destinyVersion ?? 2;
   return {

@@ -101,7 +101,7 @@ export interface TrashResultPayload {
   mirror?: { cleared: string[]; skipped: string[]; errors: string[] };
 }
 
-export interface AgentRunPayload extends AgentRequest {}
+export type AgentRunPayload = AgentRequest;
 
 export interface AgentResultPayload {
   ok: boolean;

@@ -8,10 +8,37 @@ import {
   createEnvelope,
   isEnvelope,
   type Envelope,
+  type FilterApplyPayload,
   type FilterResultPayload,
   type MessageKind,
   type MirrorResultPayload,
 } from "./types.js";
+
+/** Prefer-policy request → expected Light response kind (single source of truth). */
+const LIGHT_RESULT_KIND: Partial<Record<MessageKind, MessageKind>> = {
+  "filter-apply": "filter-result",
+  "filter-clear": "filter-result",
+  "vault-get": "vault-result",
+  "mirror-set": "mirror-result",
+  "mirror-clear": "mirror-result",
+};
+
+function isPreferPolicyKind(kind: MessageKind): boolean {
+  return LIGHT_RESULT_KIND[kind] !== undefined;
+}
+
+function isSuccessPayload(requestKind: MessageKind, response: Envelope): boolean {
+  if (requestKind === "filter-apply" || requestKind === "filter-clear") {
+    return (response.payload as FilterResultPayload | undefined)?.applied === true;
+  }
+  if (requestKind === "vault-get") {
+    return (response.payload as InventoryStatus | undefined)?.state === "ok";
+  }
+  if (requestKind === "mirror-set" || requestKind === "mirror-clear") {
+    return (response.payload as MirrorResultPayload | undefined)?.ok === true;
+  }
+  return false;
+}
 
 /** Whether a Light response is the success-shaped winner for multi-tab prefer. */
 export function isPreferableLightResponse(
@@ -19,29 +46,9 @@ export function isPreferableLightResponse(
   response: Envelope,
 ): boolean {
   if (!isEnvelope(response)) return false;
-
-  if (
-    (request.kind === "filter-apply" || request.kind === "filter-clear") &&
-    response.kind === "filter-result"
-  ) {
-    const applied = (response.payload as FilterResultPayload | undefined)?.applied;
-    return applied === true;
-  }
-
-  if (request.kind === "vault-get" && response.kind === "vault-result") {
-    const state = (response.payload as InventoryStatus | undefined)?.state;
-    return state === "ok";
-  }
-
-  if (
-    (request.kind === "mirror-set" || request.kind === "mirror-clear") &&
-    response.kind === "mirror-result"
-  ) {
-    const ok = (response.payload as MirrorResultPayload | undefined)?.ok;
-    return ok === true;
-  }
-
-  return false;
+  if (!isPreferPolicyKind(request.kind)) return false;
+  if (LIGHT_RESULT_KIND[request.kind] !== response.kind) return false;
+  return isSuccessPayload(request.kind, response);
 }
 
 /** Soft-fail / partial responses still usable as fallback when no success exists. */
@@ -50,16 +57,8 @@ export function isMatchingLightResponse(
   response: Envelope | undefined,
 ): response is Envelope {
   if (!response || !isEnvelope(response)) return false;
-
-  if (request.kind === "filter-apply" || request.kind === "filter-clear") {
-    return response.kind === "filter-result";
-  }
-  if (request.kind === "vault-get") {
-    return response.kind === "vault-result";
-  }
-  if (request.kind === "mirror-set" || request.kind === "mirror-clear") {
-    return response.kind === "mirror-result";
-  }
+  const expected = LIGHT_RESULT_KIND[request.kind];
+  if (expected) return response.kind === expected;
   // Unknown Light kinds: accept any envelope as last resort.
   return true;
 }
@@ -78,16 +77,8 @@ export function selectLightResponse(
     if (!isMatchingLightResponse(message, response)) continue;
     if (isPreferableLightResponse(message, response)) return response;
     fallback ??= response;
-    // For non-prefer kinds (e.g. roundtrip), first matching envelope wins.
-    if (
-      message.kind !== "filter-apply" &&
-      message.kind !== "filter-clear" &&
-      message.kind !== "vault-get" &&
-      message.kind !== "mirror-set" &&
-      message.kind !== "mirror-clear"
-    ) {
-      return response;
-    }
+    // Non-prefer kinds (e.g. roundtrip): first matching envelope wins.
+    if (!isPreferPolicyKind(message.kind)) return response;
   }
   return fallback;
 }
@@ -105,8 +96,7 @@ export function noLightFilterResult(
   kind: "filter-apply" | "filter-clear",
   query = "",
 ): Envelope<"filter-result", FilterResultPayload> {
-  const q =
-    kind === "filter-apply" ? query : "";
+  const q = kind === "filter-apply" ? query : "";
   return createEnvelope("filter-result", requestId, {
     ok: false,
     query: q,
@@ -123,16 +113,12 @@ export function noLightMirrorResult(requestId: string): Envelope<"mirror-result"
 }
 
 /** Build no-Light fallback for Light-relayed kinds; undefined if kind is local. */
-export function noLightFallback(
-  message: Envelope,
-): Envelope | undefined {
-  switch (message.kind as MessageKind) {
+export function noLightFallback(message: Envelope): Envelope | undefined {
+  switch (message.kind) {
     case "vault-get":
       return noLightVaultResult(message.requestId);
     case "filter-apply": {
-      const query = String(
-        (message.payload as { query?: string } | undefined)?.query ?? "",
-      );
+      const query = (message.payload as FilterApplyPayload | undefined)?.query ?? "";
       return noLightFilterResult(message.requestId, "filter-apply", query);
     }
     case "filter-clear":
