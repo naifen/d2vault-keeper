@@ -340,4 +340,4 @@ compose.local.yml
 *.tar
 *.tar.gz
 *.tgz
-*.zip
+*.zipartifacts/
