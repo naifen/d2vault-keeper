@@ -26,10 +26,24 @@
 
     <section class="wb-section" id="section-filter" aria-label="Filter and results">
       <h2>Filter / results</h2>
+      <label class="wb-label" for="filter-input">DIM filter</label>
       <div class="wb-row">
-        <p id="vault-status" class="wb-status">Vault: not loaded</p>
+        <input
+          id="filter-input"
+          class="wb-input"
+          type="text"
+          spellcheck="false"
+          placeholder='e.g. is:handcannon -is:exotic'
+          aria-label="DIM filter string"
+        />
+      </div>
+      <div class="wb-row wb-actions">
+        <button type="button" id="btn-apply-filter">Apply</button>
+        <button type="button" id="btn-clear-filter">Clear</button>
         <button type="button" id="btn-refresh-vault">Refresh vault</button>
       </div>
+      <p id="filter-status" class="wb-status">Filter idle</p>
+      <p id="vault-status" class="wb-status">Vault: not loaded</p>
       <div
         id="vault-list"
         class="vault-list"
@@ -37,7 +51,7 @@
         aria-label="Vault items"
         tabindex="0"
       ></div>
-      <p class="wb-muted" id="vault-hint">Vault-only items from DIM profile cache (no Bungie HTTP).</p>
+      <p class="wb-muted" id="vault-hint">Vault-only items from DIM profile cache (no Bungie HTTP). Apply writes into DIM search via dim-bridge.</p>
     </section>
 
     <section class="wb-section wb-placeholder" id="section-trash" aria-label="Trash">

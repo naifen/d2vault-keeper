@@ -20,6 +20,10 @@ const btn = document.getElementById("btn-roundtrip");
 const vaultStatusEl = document.getElementById("vault-status");
 const vaultListEl = document.getElementById("vault-list");
 const btnRefresh = document.getElementById("btn-refresh-vault");
+const filterInput = document.getElementById("filter-input") as HTMLInputElement | null;
+const filterStatusEl = document.getElementById("filter-status");
+const btnApply = document.getElementById("btn-apply-filter");
+const btnClearFilter = document.getElementById("btn-clear-filter");
 
 let vaultItems: VaultItem[] = [];
 
@@ -139,6 +143,57 @@ async function runRoundTrip(): Promise<void> {
   }
 }
 
+function setFilterStatus(text: string, state: "ok" | "err" | "idle" = "idle"): void {
+  if (!filterStatusEl) return;
+  filterStatusEl.textContent = text;
+  if (state === "idle") filterStatusEl.removeAttribute("data-state");
+  else filterStatusEl.setAttribute("data-state", state);
+}
+
+async function applyFilter(): Promise<void> {
+  const query = filterInput?.value ?? "";
+  setFilterStatus("Applying…");
+  try {
+    const res = await browser.runtime.sendMessage(
+      createEnvelope("filter-apply", newRequestId(), { query }),
+    );
+    if (!isEnvelope(res) || res.kind !== "filter-result") {
+      setFilterStatus("Apply failed: bad response", "err");
+      return;
+    }
+    const payload = res.payload as { ok?: boolean; applied?: boolean; error?: string; query?: string };
+    if (payload?.ok && payload.applied) {
+      setFilterStatus(`Applied to DIM: ${payload.query || "(empty)"}`, "ok");
+    } else {
+      setFilterStatus(payload?.error ?? "Apply failed", "err");
+    }
+  } catch (err) {
+    setFilterStatus(`Apply error: ${String(err)}`, "err");
+  }
+}
+
+async function clearFilter(): Promise<void> {
+  setFilterStatus("Clearing…");
+  try {
+    const res = await browser.runtime.sendMessage(
+      createEnvelope("filter-clear", newRequestId()),
+    );
+    if (!isEnvelope(res) || res.kind !== "filter-result") {
+      setFilterStatus("Clear failed: bad response", "err");
+      return;
+    }
+    const payload = res.payload as { ok?: boolean; applied?: boolean; error?: string };
+    if (payload?.ok && payload.applied) {
+      if (filterInput) filterInput.value = "";
+      setFilterStatus("Cleared DIM search", "ok");
+    } else {
+      setFilterStatus(payload?.error ?? "Clear failed", "err");
+    }
+  } catch (err) {
+    setFilterStatus(`Clear error: ${String(err)}`, "err");
+  }
+}
+
 async function loadVault(): Promise<void> {
   setVaultStatus("Loading vault…");
   try {
@@ -176,6 +231,18 @@ async function init(): Promise<void> {
   });
   btnRefresh?.addEventListener("click", () => {
     void loadVault();
+  });
+  btnApply?.addEventListener("click", () => {
+    void applyFilter();
+  });
+  btnClearFilter?.addEventListener("click", () => {
+    void clearFilter();
+  });
+  filterInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void applyFilter();
+    }
   });
   vaultListEl?.addEventListener("scroll", () => {
     renderVaultList();

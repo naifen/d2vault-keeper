@@ -12,6 +12,7 @@ import {
   type RoundTripPayload,
 } from "../messaging/index.js";
 import { DIM_URL_PATTERNS } from "../shared/dim.js";
+import { selectLightResponse } from "./relay.js";
 
 async function queryDimTabs(): Promise<browser.tabs.Tab[]> {
   return browser.tabs.query({ url: [...DIM_URL_PATTERNS] });
@@ -19,16 +20,17 @@ async function queryDimTabs(): Promise<browser.tabs.Tab[]> {
 
 async function relayToLight(message: Envelope): Promise<Envelope | undefined> {
   const tabs = await queryDimTabs();
+  const responses: Array<Envelope | undefined> = [];
   for (const tab of tabs) {
     if (tab.id === undefined) continue;
     try {
       const response = (await browser.tabs.sendMessage(tab.id, message)) as unknown;
-      if (isEnvelope(response)) return response;
+      responses.push(isEnvelope(response) ? response : undefined);
     } catch {
       // Tab may not have content script yet; try next.
     }
   }
-  return undefined;
+  return selectLightResponse(message, responses);
 }
 
 browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
@@ -68,6 +70,26 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
               state: "empty",
               reason: "no-light",
               message: "Open DIM logged in (no Light content script on a DIM tab).",
+            }),
+          );
+        }
+        return;
+      }
+      case "filter-apply":
+      case "filter-clear": {
+        const lightRes = await relayToLight(message);
+        if (lightRes && lightRes.kind === "filter-result") {
+          sendResponse(lightRes);
+        } else {
+          sendResponse(
+            createEnvelope("filter-result", message.requestId, {
+              ok: false,
+              query:
+                message.kind === "filter-apply"
+                  ? String((message.payload as { query?: string } | undefined)?.query ?? "")
+                  : "",
+              applied: false,
+              error: "Open DIM inventory (Light not reachable).",
             }),
           );
         }

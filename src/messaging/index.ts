@@ -8,6 +8,8 @@ export {
   type RoundTripPayload,
   type RoundTripResultPayload,
   type LightStatusPayload,
+  type FilterApplyPayload,
+  type FilterResultPayload,
 } from "./types.js";
 
 export {

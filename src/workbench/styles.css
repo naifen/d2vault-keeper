@@ -98,12 +98,41 @@ button:hover {
   word-break: break-word;
 }
 
+.wb-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.wb-input {
+  width: 100%;
+  background: #0a0e16;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 6px 8px;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+}
+
+.wb-input:focus {
+  outline: 1px solid var(--accent-dim);
+  border-color: var(--accent-dim);
+}
+
 .wb-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+.wb-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
 }
 
 .wb-row .wb-status {

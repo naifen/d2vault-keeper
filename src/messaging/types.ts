@@ -13,7 +13,21 @@ export type MessageKind =
   | "light-status"
   | "vault-get"
   | "vault-result"
+  | "filter-apply"
+  | "filter-clear"
+  | "filter-result"
   | "error";
+
+export interface FilterApplyPayload {
+  query: string;
+}
+
+export interface FilterResultPayload {
+  ok: boolean;
+  query: string;
+  applied: boolean;
+  error?: string;
+}
 
 export interface Envelope<TKind extends MessageKind = MessageKind, TPayload = unknown> {
   source: typeof MESSAGE_SOURCE;
