@@ -81,8 +81,9 @@ describe("readVaultInventory (mock IDB)", () => {
   it("ok path with warm cache", async () => {
     const idb: IdbKeyval = {
       async get<T>(key: string) {
-        expect(key).toBe("profile-42");
-        return warmProfile as T;
+        if (key === "profile-42") return warmProfile as T;
+        // Enrichment may probe manifest / dim-api keys — empty is fine.
+        return undefined;
       },
     };
     const status = await readVaultInventory({
