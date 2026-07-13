@@ -4,13 +4,13 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createWorkbenchClient,
-  buildVaultSlice,
   type RuntimeSend,
 } from "../src/workbench/client.js";
 import { toStageCandidate, selectedStageCandidates } from "../src/workbench/stage-map.js";
 import { emptyTrashState, stageItems } from "../src/trash/index.js";
 import type { VaultItem } from "../src/inventory/index.js";
 import { createEnvelope } from "../src/messaging/index.js";
+import { buildAgentRequest } from "../src/agent/index.js";
 
 const normal: VaultItem = {
   id: "n1",
@@ -63,31 +63,6 @@ describe("toStageCandidate (shipped)", () => {
   it("selectedStageCandidates only includes selected ids", () => {
     const selected = selectedStageCandidates([normal, exotic, favorite], new Set(["f1", "n1"]));
     expect(selected.map((c) => c.id).sort()).toEqual(["f1", "n1"]);
-  });
-});
-
-describe("buildVaultSlice (shipped)", () => {
-  it("returns undefined when opt-in false", () => {
-    expect(buildVaultSlice([normal], false)).toBeUndefined();
-  });
-
-  it("caps length and keeps field subset", () => {
-    const many: VaultItem[] = Array.from({ length: 250 }, (_, i) => {
-      const row: VaultItem = { ...normal, id: `id-${i}` };
-      if (i === 0) row.tag = "keep";
-      return row;
-    });
-    const slice = buildVaultSlice(many, true, 200);
-    expect(slice).toHaveLength(200);
-    expect(slice![0]).toEqual({
-      id: "id-0",
-      itemHash: 1,
-      name: "Trust",
-      tierType: "Legendary",
-      tag: "keep",
-    });
-    expect(slice![0]).not.toHaveProperty("itemType");
-    expect(slice![0]).not.toHaveProperty("isExotic");
   });
 });
 

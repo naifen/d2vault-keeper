@@ -12,7 +12,11 @@ import {
 } from "../messaging/index.js";
 import type { InventoryStatus, VaultItem } from "../inventory/index.js";
 import type { StageCandidate, TrashRecord, TrashState } from "../trash/index.js";
-import type { AgentRecommendation, AgentResult } from "../agent/index.js";
+import {
+  buildAgentRequest,
+  type AgentRecommendation,
+  type AgentResult,
+} from "../agent/index.js";
 import { selectedStageCandidates } from "./stage-map.js";
 
 export type RuntimeSend = (message: Envelope) => Promise<unknown>;
@@ -76,27 +80,6 @@ function asTrashPayload(payload: unknown): {
 function trashFailed(payload: { ok?: boolean; error?: string }, fallback: string): ClientErr | null {
   if (payload.ok === false) return bad(payload.error ?? fallback);
   return null;
-}
-
-/** Build vault slice for Agent (field subset + hard cap). Bound is client policy for C1; C4 may relocate. */
-export function buildVaultSlice(
-  vaultItems: readonly VaultItem[],
-  optIn: boolean,
-  limit = 200,
-): Array<{ id: string; itemHash: number; name: string; tierType?: string; tag?: string }> | undefined {
-  if (!optIn) return undefined;
-  return vaultItems.slice(0, limit).map((v) => {
-    const row: {
-      id: string;
-      itemHash: number;
-      name: string;
-      tierType?: string;
-      tag?: string;
-    } = { id: v.id, itemHash: v.itemHash, name: v.name };
-    if (v.tierType !== undefined) row.tierType = v.tierType;
-    if (v.tag !== undefined) row.tag = v.tag;
-    return row;
-  });
 }
 
 export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
@@ -289,20 +272,14 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
     },
 
     async runAgent(input) {
-      const vaultSlice = buildVaultSlice(
-        input.vaultItems,
-        input.vaultContextOptIn,
-        input.vaultSliceLimit ?? 200,
-      );
-      const payload: {
-        intention: string;
-        vaultContextOptIn: boolean;
-        vaultSlice?: typeof vaultSlice;
-      } = {
+      const payload = buildAgentRequest({
         intention: input.intention,
         vaultContextOptIn: input.vaultContextOptIn,
-      };
-      if (input.vaultContextOptIn && vaultSlice) payload.vaultSlice = vaultSlice;
+        vaultItems: input.vaultItems,
+        ...(input.vaultSliceLimit !== undefined
+          ? { vaultSliceLimit: input.vaultSliceLimit }
+          : {}),
+      });
 
       try {
         const res = await send(createEnvelope("agent-run", newRequestId(), payload));

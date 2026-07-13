@@ -15,6 +15,12 @@ export {
   requestIncludesVaultDump,
 } from "./build-request.js";
 export {
+  buildAgentRequest,
+  DEFAULT_VAULT_SLICE_LIMIT,
+  type BuildAgentRequestInput,
+  type VaultViewItem,
+} from "./build-agent-request.js";
+export {
   runAgent,
   createAgentController,
   type FetchFn,
