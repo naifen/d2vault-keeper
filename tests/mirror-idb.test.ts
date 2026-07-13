@@ -50,6 +50,11 @@ describe("mutateDimApiProfileTag", () => {
     const noTouch = mutateDimApiProfileTag(start, "item-2", null, "99");
     expect(noTouch.changed).toBe(false);
   });
+
+  it("clear of missing annotation does not invent a dim-api-profile", () => {
+    const cleared = mutateDimApiProfileTag(undefined, "ghost", null, "7");
+    expect(cleared.changed).toBe(false);
+  });
 });
 
 describe("IDB Mirror bridge (shipped path)", () => {

@@ -35,7 +35,15 @@ export function extractTagsFromDimApiProfile(
 
   const profileEntries = Object.entries(profiles as Record<string, unknown>);
   for (const [accountKey, profile] of profileEntries) {
-    if (membershipId && !accountKey.startsWith(membershipId)) continue;
+    // Match exact DIM account key prefix: `${membershipId}-d${version}` (not bare startsWith —
+    // avoids "42" matching "421-d2").
+    if (
+      membershipId &&
+      accountKey !== membershipId &&
+      !accountKey.startsWith(`${membershipId}-d`)
+    ) {
+      continue;
+    }
     if (typeof profile !== "object" || profile === null) continue;
     const tags = (profile as Record<string, unknown>).tags;
     if (typeof tags !== "object" || tags === null) continue;

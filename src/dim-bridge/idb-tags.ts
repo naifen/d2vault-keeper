@@ -49,12 +49,16 @@ export function mutateDimApiProfileTag(
       ? { ...(profile.tags as Record<string, unknown>) }
       : {};
 
-  const existing: Record<string, unknown> =
-    typeof tags[itemId] === "object" && tags[itemId] !== null
-      ? { ...(tags[itemId] as Record<string, unknown>) }
-      : { id: itemId };
+  const hadEntry = typeof tags[itemId] === "object" && tags[itemId] !== null;
+  const existing: Record<string, unknown> = hadEntry
+    ? { ...(tags[itemId] as Record<string, unknown>) }
+    : { id: itemId };
 
   if (tag === null) {
+    // Nothing to clear — do not invent an empty dim-api-profile blob.
+    if (!hadEntry) {
+      return { next: raw ?? root, changed: false };
+    }
     // Clear junk only — leave other fields; remove annotation if empty.
     if (existing.tag === MIRROR_TAG || existing.tag === "junk") {
       delete existing.tag;

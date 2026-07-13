@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import {
   readVaultInventory,
+  extractTagsFromDimApiProfile,
   type IdbKeyval,
   LAST_MEMBERSHIP_KEY,
   DIM_API_PROFILE_KEY,
@@ -126,5 +127,21 @@ describe("vault enrichment → Stage exclusions (shipped path)", () => {
         { id: "inst-fav", reason: "favorite" },
       ]),
     );
+  });
+
+  it("does not match membership id as bare prefix of another account key", () => {
+    const raw = {
+      profiles: {
+        "421-d2": {
+          tags: { "inst-other": { id: "inst-other", tag: "favorite" } },
+        },
+        "42-d2": {
+          tags: { "inst-mine": { id: "inst-mine", tag: "keep" } },
+        },
+      },
+    };
+    const tags = extractTagsFromDimApiProfile(raw, "42");
+    expect(tags.get("inst-mine")).toBe("keep");
+    expect(tags.has("inst-other")).toBe(false);
   });
 });
