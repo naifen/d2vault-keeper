@@ -18,6 +18,14 @@ npm run typecheck
 npm run build
 ```
 
+### CI
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on push/PR to `main`:
+
+`npm ci` → typecheck → test → build → package smoke.
+
+Spec: [`spec/spec-process-cicd-ci.md`](./spec/spec-process-cicd-ci.md).
+
 ### Load temporary add-on
 
 See [`docs/packaging.md`](./docs/packaging.md). Short path:
