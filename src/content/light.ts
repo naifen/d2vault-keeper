@@ -1,6 +1,6 @@
 /**
  * Light trigger content-script entry (classic script; built as IIFE).
- * Hosts dim-bridge (search apply) + inventory IDB read.
+ * Hosts dim-bridge (search apply + IDB junk Mirror) + inventory IDB read.
  * Does NOT open the Workbench (Firefox user-gesture rules).
  */
 
@@ -16,19 +16,23 @@ import {
 import {
   browserLocalStorageGet,
   createBrowserIdbKeyval,
+  LAST_MEMBERSHIP_KEY,
   readVaultInventory,
   type InventoryStatus,
 } from "../inventory/index.js";
 import {
+  createBrowserIdbTagHooks,
   createDimBridge,
   createMirrorBridgeFromHooks,
-  createSoftFailTagHooks,
   defaultSearchLocator,
 } from "../dim-bridge/index.js";
 import { ensureChip } from "./chip.js";
 
+const idb = createBrowserIdbKeyval();
 const bridge = createDimBridge(document, defaultSearchLocator);
-const tagBridge = createMirrorBridgeFromHooks(createSoftFailTagHooks());
+const tagBridge = createMirrorBridgeFromHooks(
+  createBrowserIdbTagHooks(idb, () => browserLocalStorageGet(LAST_MEMBERSHIP_KEY)),
+);
 
 function announcePresence(): void {
   const payload: LightStatusPayload = {
@@ -41,9 +45,11 @@ function announcePresence(): void {
 }
 
 async function handleVaultGet(requestId: string): Promise<Envelope<"vault-result", InventoryStatus>> {
+  // Always enrich from DIM IDB (defs + tags) so Stage exclusions see isExotic / favorite.
   const status = await readVaultInventory({
     getLocalStorage: browserLocalStorageGet,
-    idb: createBrowserIdbKeyval(),
+    idb,
+    enrich: true,
   });
   return createEnvelope("vault-result", requestId, status);
 }

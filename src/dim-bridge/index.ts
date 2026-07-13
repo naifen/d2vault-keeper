@@ -7,3 +7,8 @@ export {
   createMessagingMirrorBridge,
   type TagDomHooks,
 } from "./tags.js";
+export {
+  mutateDimApiProfileTag,
+  createIdbTagHooks,
+  createBrowserIdbTagHooks,
+} from "./idb-tags.js";

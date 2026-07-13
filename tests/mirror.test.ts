@@ -91,10 +91,10 @@ describe("Repair Mirror selection", () => {
 
 describe("mockable dim-bridge tag adapter", () => {
   it("createMirrorBridgeFromHooks uses injected hooks", async () => {
-    const setTag = vi.fn(async (_id: string, tag: "junk" | null) => tag === "junk");
+    const setTag = vi.fn(async (_id: string, tag: "junk" | null) => tag === "junk" || tag === null);
     const bridge = createMirrorBridgeFromHooks({ setTag });
     expect((await bridge.setJunkTag("abc")).ok).toBe(true);
-    expect((await bridge.clearJunkTag("abc")).ok).toBe(false);
+    expect((await bridge.clearJunkTag("abc")).ok).toBe(true);
     expect(setTag).toHaveBeenCalledWith("abc", "junk");
     expect(setTag).toHaveBeenCalledWith("abc", null);
   });

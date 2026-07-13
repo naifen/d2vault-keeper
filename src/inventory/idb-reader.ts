@@ -1,11 +1,18 @@
 /**
  * Read DIM IDB profile cache (keyval-store / keyval).
- * Injectable factories so unit tests never open real IndexedDB.
+ * Loads definitions + dim-api tags so Stage exclusions see isExotic / favorite.
  * Never create/upgrade DIM’s database.
  */
 
 import { membershipProfileKey, resolveMembershipId, LAST_MEMBERSHIP_KEY } from "./membership.js";
 import { extractVaultItems } from "./extract.js";
+import {
+  definitionsFromManifestTables,
+  DIM_API_PROFILE_KEY,
+  enrichVaultItems,
+  extractTagsFromDimApiProfile,
+  MANIFEST_KEY_CANDIDATES,
+} from "./enrichment.js";
 import type { DefinitionMap, DestinyProfileResponseLike, InventoryStatus, VaultItem } from "./types.js";
 
 export const IDB_DB_NAME = "keyval-store";
@@ -15,12 +22,27 @@ export type LocalStorageGet = (key: string) => string | null;
 
 export interface IdbKeyval {
   get<T = unknown>(key: string): Promise<T | undefined>;
+  /** Optional write (Mirror junk path). */
+  set?(key: string, value: unknown): Promise<void>;
 }
 
 export interface ReadVaultOptions {
   getLocalStorage: LocalStorageGet;
   idb: IdbKeyval;
+  /** Optional inject; when omitted, loaded from DIM IDB automatically. */
   definitions?: DefinitionMap;
+  /** When false, skip dim-api-profile / manifest enrichment (tests). Default true. */
+  enrich?: boolean;
+}
+
+async function loadDefinitionsFromIdb(idb: IdbKeyval): Promise<DefinitionMap> {
+  for (const key of MANIFEST_KEY_CANDIDATES) {
+    const raw = await idb.get(key);
+    if (raw === undefined) continue;
+    const defs = definitionsFromManifestTables(raw);
+    if (defs.size > 0) return defs;
+  }
+  return new Map();
 }
 
 export async function readVaultInventory(options: ReadVaultOptions): Promise<InventoryStatus> {
@@ -44,9 +66,23 @@ export async function readVaultInventory(options: ReadVaultOptions): Promise<Inv
       };
     }
 
-    const extractOpts =
-      options.definitions !== undefined ? { definitions: options.definitions } : {};
-    const items: VaultItem[] = extractVaultItems(profile, extractOpts);
+    const shouldEnrich = options.enrich !== false;
+    let definitions = options.definitions;
+    if (definitions === undefined && shouldEnrich) {
+      definitions = await loadDefinitionsFromIdb(options.idb);
+    }
+
+    const extractOpts = definitions !== undefined && definitions.size > 0 ? { definitions } : {};
+    let items: VaultItem[] = extractVaultItems(profile, extractOpts);
+
+    if (shouldEnrich) {
+      const dimApi = await options.idb.get(DIM_API_PROFILE_KEY);
+      const tags = extractTagsFromDimApiProfile(dimApi, membershipId);
+      items = enrichVaultItems(items, {
+        ...(definitions !== undefined ? { definitions } : {}),
+        tags,
+      });
+    }
 
     if (items.length === 0) {
       return {
@@ -71,6 +107,7 @@ export type ListDatabasesFn = () => Promise<IDBDatabaseInfo[]>;
 /**
  * Browser adapter: open DIM's existing keyval IDB only.
  * Refuses to create a new empty keyval-store (would poison DIM).
+ * Supports read + write for Mirror tag path.
  */
 export function createBrowserIdbKeyval(
   openDb: OpenDbFn = (name) => indexedDB.open(name),
@@ -82,7 +119,7 @@ export function createBrowserIdbKeyval(
   let dbPromise: Promise<IDBDatabase> | null = null;
 
   async function ensureDimDbExists(): Promise<void> {
-    if (!listDatabases) return; // older engines: open carefully below
+    if (!listDatabases) return;
     const dbs = await listDatabases();
     const found = dbs.some((d) => d.name === IDB_DB_NAME);
     if (!found) {
@@ -98,7 +135,6 @@ export function createBrowserIdbKeyval(
           const req = openDb(IDB_DB_NAME);
           req.onerror = () => reject(req.error ?? new Error("IDB open failed"));
           req.onblocked = () => reject(new Error("IDB open blocked"));
-          // Never create/upgrade schema — DIM owns keyval-store.
           req.onupgradeneeded = () => {
             try {
               req.transaction?.abort();
@@ -131,6 +167,16 @@ export function createBrowserIdbKeyval(
         const req = store.get(key);
         req.onerror = () => reject(req.error ?? new Error("IDB get failed"));
         req.onsuccess = () => resolve(req.result as T | undefined);
+      });
+    },
+    async set(key: string, value: unknown): Promise<void> {
+      const db = await getDb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE_NAME, "readwrite");
+        const store = tx.objectStore(IDB_STORE_NAME);
+        const req = store.put(value, key);
+        req.onerror = () => reject(req.error ?? new Error("IDB put failed"));
+        req.onsuccess = () => resolve();
       });
     },
   };

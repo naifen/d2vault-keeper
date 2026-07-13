@@ -49,13 +49,17 @@ Full happy-path checklist: [`docs/manual-qa.md`](./docs/manual-qa.md).
 | `content` (Light) | On-page chip + dim-bridge host |
 | `workbench` | Side panel UI |
 | `messaging` | Typed envelopes Workbench ↔ background ↔ Light |
-| `inventory` | Vault read from DIM IDB (later) |
-| `trash` | Local Stage SoT (later) |
-| `agent` | BYO Intention → filters (later) |
+| `inventory` | Vault read from DIM IDB (+ defs/tags enrichment) |
+| `trash` | Local Stage SoT |
+| `mirror` | Best-effort junk via DIM local `dim-api-profile` IDB |
+| `agent` | BYO Intention → filters |
+| `dim-bridge` | Search apply + tag hooks |
 
 ## Permissions
 
-- `storage` — Trash + settings
-- Host: `destinyitemmanager.com` only
+- `storage` — Trash + agent settings
+- Host: `destinyitemmanager.com` (Light, IDB, dim-bridge)
+- Host: `https://openrouter.ai/*` (default BYO agent)
+- Optional: `https://*/*` / localhost for custom OpenRouter-compatible base URLs
 
-No Bungie OAuth. No auto-Stage. No in-extension dismantle.
+No Bungie OAuth / identity permission. No auto-Stage. No in-extension dismantle.

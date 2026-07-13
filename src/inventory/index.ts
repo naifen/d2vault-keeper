@@ -26,3 +26,13 @@ export {
   type IdbKeyval,
   type ReadVaultOptions,
 } from "./idb-reader.js";
+export {
+  enrichVaultItems,
+  extractTagsFromDimApiProfile,
+  definitionsFromManifestTables,
+  applyDefinitions,
+  applyTags,
+  DIM_API_PROFILE_KEY,
+  TIER_TYPE_EXOTIC,
+  type TagByItemId,
+} from "./enrichment.js";
