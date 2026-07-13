@@ -1,0 +1,99 @@
+:root {
+  color-scheme: dark;
+  --bg: #0d111a;
+  --bg-elevated: #151b28;
+  --border: #2a3344;
+  --text: #e6eaf0;
+  --muted: #8b95a8;
+  --accent: #c5a572;
+  --accent-dim: #8a7349;
+  --ok: #5cb87a;
+  --err: #d35f5f;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.wb-header h1 {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+  font-weight: 650;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+
+.wb-sub {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.wb-section {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.wb-section h2 {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-dim);
+}
+
+.wb-muted {
+  margin: 0;
+  color: var(--muted);
+}
+
+.wb-status {
+  margin: 0 0 8px;
+}
+
+.wb-status[data-state="ok"] {
+  color: var(--ok);
+}
+
+.wb-status[data-state="err"] {
+  color: var(--err);
+}
+
+button {
+  background: #1e2636;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font: inherit;
+}
+
+button:hover {
+  border-color: var(--accent-dim);
+}
+
+.wb-log {
+  margin: 8px 0 0;
+  padding: 8px;
+  background: #0a0e16;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

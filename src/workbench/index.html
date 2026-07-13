@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vault Keeper Workbench</title>
+    <link rel="stylesheet" href="workbench.css" />
+  </head>
+  <body>
+    <header class="wb-header">
+      <h1>Vault Keeper</h1>
+      <p class="wb-sub">Companion for DIM — stages gear for in-game dismantle; never deletes Destiny items.</p>
+    </header>
+
+    <section class="wb-section" id="section-connection" aria-label="Connection">
+      <h2>Connection</h2>
+      <p id="conn-status" class="wb-status">Checking…</p>
+      <button type="button" id="btn-roundtrip">Test message round-trip</button>
+      <pre id="roundtrip-log" class="wb-log" hidden></pre>
+    </section>
+
+    <section class="wb-section wb-placeholder" id="section-intention" aria-label="Intention">
+      <h2>Intention</h2>
+      <p class="wb-muted">Agent loop lands in a later ticket.</p>
+    </section>
+
+    <section class="wb-section wb-placeholder" id="section-filter" aria-label="Filter and results">
+      <h2>Filter / results</h2>
+      <p class="wb-muted">Vault list and filter apply land in later tickets.</p>
+    </section>
+
+    <section class="wb-section wb-placeholder" id="section-trash" aria-label="Trash">
+      <h2>Trash</h2>
+      <p class="wb-muted">Staging lands in a later ticket. Items here are not deleted from Destiny.</p>
+    </section>
+
+    <script type="module" src="workbench.js"></script>
+  </body>
+</html>
