@@ -555,9 +555,14 @@ async function init(): Promise<void> {
     { passive: true },
   );
 
+  // Refresh only while Workbench is focused (no background pollers / no closed-sidebar timers).
   window.addEventListener("focus", () => {
     void loadVault();
     void loadTrash();
+  });
+  window.addEventListener("pagehide", () => {
+    selectedVaultIds.clear();
+    selectedTrashIds.clear();
   });
 
   void loadVault();

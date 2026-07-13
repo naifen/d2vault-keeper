@@ -14,10 +14,13 @@ Domain glossary: [`CONTEXT.md`](./CONTEXT.md).
 ```bash
 npm install
 npm test
+npm run typecheck
 npm run build
 ```
 
 ### Load temporary add-on
+
+See [`docs/packaging.md`](./docs/packaging.md). Short path:
 
 1. `npm run build`
 2. Firefox → `about:debugging` → **This Firefox** → **Load Temporary Add-on…**
@@ -27,6 +30,16 @@ npm run build
 6. Open Workbench via toolbar button or sidebar (`_execute_sidebar_action`)
 
 Optional package zip: `npm run package` → `artifacts/vault-keeper.zip`.
+
+### Manual QA (live DIM)
+
+Full happy-path checklist: [`docs/manual-qa.md`](./docs/manual-qa.md).
+
+### Perf notes
+
+- Vault list is **virtualized** (windowed rows) for 1000+ items.
+- Background is an **event page** — no inventory/agent pollers when Workbench is closed.
+- Agent requests are **cancelable**.
 
 ## Architecture (MVP seams)
 

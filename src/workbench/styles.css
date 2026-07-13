@@ -20,11 +20,12 @@
 
 body {
   margin: 0;
-  padding: 12px;
+  padding: 10px;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
 }
+
 
 .wb-header h1 {
   margin: 0 0 4px;
@@ -177,7 +178,7 @@ button:hover {
 
 .vault-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: auto 1fr auto;
   gap: 8px;
   align-items: center;
   padding: 0 8px;
