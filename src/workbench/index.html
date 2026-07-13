@@ -24,9 +24,20 @@
       <p class="wb-muted">Agent loop lands in a later ticket.</p>
     </section>
 
-    <section class="wb-section wb-placeholder" id="section-filter" aria-label="Filter and results">
+    <section class="wb-section" id="section-filter" aria-label="Filter and results">
       <h2>Filter / results</h2>
-      <p class="wb-muted">Vault list and filter apply land in later tickets.</p>
+      <div class="wb-row">
+        <p id="vault-status" class="wb-status">Vault: not loaded</p>
+        <button type="button" id="btn-refresh-vault">Refresh vault</button>
+      </div>
+      <div
+        id="vault-list"
+        class="vault-list"
+        role="list"
+        aria-label="Vault items"
+        tabindex="0"
+      ></div>
+      <p class="wb-muted" id="vault-hint">Vault-only items from DIM profile cache (no Bungie HTTP).</p>
     </section>
 
     <section class="wb-section wb-placeholder" id="section-trash" aria-label="Trash">

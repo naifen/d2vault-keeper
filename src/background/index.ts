@@ -56,8 +56,24 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
         sendResponse(result);
         return;
       }
+      case "vault-get": {
+        const lightRes = await relayToLight(
+          createEnvelope("vault-get", message.requestId),
+        );
+        if (lightRes && lightRes.kind === "vault-result") {
+          sendResponse(lightRes);
+        } else {
+          sendResponse(
+            createEnvelope("vault-result", message.requestId, {
+              state: "empty",
+              reason: "no-light",
+              message: "Open DIM logged in (no Light content script on a DIM tab).",
+            }),
+          );
+        }
+        return;
+      }
       case "light-status": {
-        // One-way announce from Light; no semantic reply needed.
         sendResponse(createEnvelope("light-status", message.requestId, { ack: true }));
         return;
       }
@@ -69,7 +85,6 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
   return true;
 });
 
-// Toolbar button opens the Workbench sidebar (user gesture).
 browser.action.onClicked.addListener(() => {
   void browser.sidebarAction.open();
 });

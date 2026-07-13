@@ -97,3 +97,59 @@ button:hover {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.wb-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.wb-row .wb-status {
+  margin: 0;
+  flex: 1;
+}
+
+.vault-list {
+  height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #0a0e16;
+  position: relative;
+}
+
+.vault-list-spacer {
+  width: 100%;
+  position: relative;
+}
+
+.vault-list-window {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+
+.vault-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 0 8px;
+  height: 28px;
+  border-bottom: 1px solid #1a2130;
+  font-size: 0.8rem;
+  box-sizing: border-box;
+}
+
+.vault-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vault-row-meta {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}

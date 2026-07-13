@@ -1,0 +1,51 @@
+{
+  "profileInventory": {
+    "data": {
+      "items": [
+        {
+          "itemHash": 1001,
+          "itemInstanceId": "9000000001",
+          "quantity": 1,
+          "bucketHash": 215593132,
+          "location": 2
+        },
+        {
+          "itemHash": 1002,
+          "itemInstanceId": "9000000002",
+          "quantity": 1,
+          "bucketHash": 215593132,
+          "location": 2
+        },
+        {
+          "itemHash": 2001,
+          "itemInstanceId": "0",
+          "quantity": 42,
+          "bucketHash": 1469714392,
+          "location": 2
+        },
+        {
+          "itemHash": 3001,
+          "itemInstanceId": "8000000001",
+          "quantity": 1,
+          "bucketHash": 1368870543,
+          "location": 2
+        },
+        {
+          "itemHash": 4001,
+          "itemInstanceId": "7000000001",
+          "quantity": 1,
+          "bucketHash": 1498876634,
+          "location": 1
+        }
+      ]
+    }
+  },
+  "itemComponents": {
+    "instances": {
+      "data": {
+        "9000000001": { "primaryStat": { "value": 1810 } },
+        "9000000002": { "primaryStat": { "value": 1750 } }
+      }
+    }
+  }
+}

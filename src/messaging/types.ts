@@ -11,6 +11,8 @@ export type MessageKind =
   | "roundtrip"
   | "roundtrip-result"
   | "light-status"
+  | "vault-get"
+  | "vault-result"
   | "error";
 
 export interface Envelope<TKind extends MessageKind = MessageKind, TPayload = unknown> {
