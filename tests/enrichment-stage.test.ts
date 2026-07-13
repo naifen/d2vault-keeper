@@ -11,6 +11,7 @@ import {
   DIM_API_PROFILE_KEY,
 } from "../src/inventory/index.js";
 import { emptyTrashState, stageItems } from "../src/trash/index.js";
+import { toStageCandidate } from "../src/workbench/stage-map.js";
 import type { DestinyProfileResponseLike } from "../src/inventory/types.js";
 
 const profile: DestinyProfileResponseLike = {
@@ -109,15 +110,8 @@ describe("vault enrichment → Stage exclusions (shipped path)", () => {
     expect(fav?.tag).toBe("favorite");
     expect(leg?.isExotic).not.toBe(true);
 
-    // Same mapping Workbench stageSelected uses.
-    const candidates = status.items.map((v) => ({
-      id: v.id,
-      itemHash: v.itemHash,
-      name: v.name,
-      ...(v.tierType !== undefined ? { tierType: v.tierType } : {}),
-      ...(v.isExotic !== undefined ? { isExotic: v.isExotic } : {}),
-      ...(v.tag !== undefined ? { tag: v.tag } : {}),
-    }));
+    // Shipped Workbench mapper — must not re-implement field list here.
+    const candidates = status.items.map(toStageCandidate);
 
     const { result } = stageItems(emptyTrashState(), candidates);
     expect(result.staged.map((s) => s.id)).toEqual(["inst-leg"]);

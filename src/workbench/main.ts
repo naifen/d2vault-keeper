@@ -1,19 +1,16 @@
 /**
  * Workbench side panel UI.
  * Opened only via toolbar / sidebar / _execute_sidebar_action — never from Light chip.
+ * Domain actions go through createWorkbenchClient — this file is the DOM adapter.
  */
 
-import {
-  createEnvelope,
-  isEnvelope,
-  newRequestId,
-  type RoundTripResultPayload,
-} from "../messaging/index.js";
-import type { InventoryStatus, VaultItem } from "../inventory/index.js";
-import type { StageCandidate, TrashRecord, TrashState } from "../trash/index.js";
+import type { VaultItem } from "../inventory/index.js";
+import type { TrashRecord } from "../trash/index.js";
 import { TRASH_SAFE_COPY } from "../trash/index.js";
-import type { AgentRecommendation, AgentResult } from "../agent/index.js";
+import type { AgentRecommendation } from "../agent/index.js";
+import { newRequestId } from "../messaging/index.js";
 import { visibleWindow } from "./virtual-list.js";
+import { createWorkbenchClient } from "./client.js";
 
 const ROW_HEIGHT = 28;
 
@@ -49,6 +46,8 @@ let trashItems: TrashRecord[] = [];
 const selectedVaultIds = new Set<string>();
 const selectedTrashIds = new Set<string>();
 
+const client = createWorkbenchClient(async (message) => browser.runtime.sendMessage(message));
+
 type StatusState = "ok" | "err" | "idle";
 
 function setElStatus(el: Element | null, text: string, state: StatusState = "idle"): void {
@@ -72,6 +71,10 @@ function setFilterStatus(text: string, state: StatusState = "idle"): void {
 
 function setTrashStatus(text: string, state: StatusState = "idle"): void {
   setElStatus(trashStatusEl, text, state);
+}
+
+function setAgentStatus(text: string, state: StatusState = "idle"): void {
+  setElStatus(agentStatusEl, text, state);
 }
 
 function renderVaultList(): void {
@@ -164,208 +167,6 @@ function renderTrashList(): void {
   }
 }
 
-async function pingBackground(): Promise<boolean> {
-  try {
-    const res = await browser.runtime.sendMessage(
-      createEnvelope("ping", newRequestId(), { from: "workbench", at: Date.now() }),
-    );
-    return isEnvelope(res) && res.kind === "pong";
-  } catch {
-    return false;
-  }
-}
-
-async function runRoundTrip(): Promise<void> {
-  const token = newRequestId();
-  setStatus("Round-trip in progress…");
-  if (logEl) {
-    logEl.hidden = false;
-    logEl.textContent = `token=${token}\n…`;
-  }
-  try {
-    const res = await browser.runtime.sendMessage(
-      createEnvelope("roundtrip", newRequestId(), { token, hop: "workbench" }),
-    );
-    if (!isEnvelope(res) || res.kind !== "roundtrip-result") {
-      setStatus("Round-trip failed: bad response", "err");
-      return;
-    }
-    const payload = res.payload as RoundTripResultPayload | undefined;
-    if (payload?.ok && payload.token === token) {
-      setStatus(`Round-trip OK: ${payload.hops.join(" → ")}`, "ok");
-    } else {
-      setStatus(
-        `Round-trip incomplete (is DIM open with Light?). hops=${payload?.hops?.join(" → ") ?? "?"}`,
-        "err",
-      );
-    }
-    if (logEl) logEl.textContent = JSON.stringify(payload, null, 2);
-  } catch (err) {
-    setStatus(`Round-trip error: ${String(err)}`, "err");
-  }
-}
-
-async function applyFilter(): Promise<void> {
-  const query = filterInput?.value ?? "";
-  setFilterStatus("Applying…");
-  try {
-    const res = await browser.runtime.sendMessage(
-      createEnvelope("filter-apply", newRequestId(), { query }),
-    );
-    if (!isEnvelope(res) || res.kind !== "filter-result") {
-      setFilterStatus("Apply failed: bad response", "err");
-      return;
-    }
-    const payload = res.payload as { ok?: boolean; applied?: boolean; error?: string; query?: string };
-    if (payload?.ok && payload.applied) {
-      setFilterStatus(`Applied to DIM: ${payload.query || "(empty)"}`, "ok");
-    } else {
-      setFilterStatus(payload?.error ?? "Apply failed", "err");
-    }
-  } catch (err) {
-    setFilterStatus(`Apply error: ${String(err)}`, "err");
-  }
-}
-
-async function clearFilter(): Promise<void> {
-  setFilterStatus("Clearing…");
-  try {
-    const res = await browser.runtime.sendMessage(createEnvelope("filter-clear", newRequestId()));
-    if (!isEnvelope(res) || res.kind !== "filter-result") {
-      setFilterStatus("Clear failed: bad response", "err");
-      return;
-    }
-    const payload = res.payload as { ok?: boolean; applied?: boolean; error?: string };
-    if (payload?.ok && payload.applied) {
-      if (filterInput) filterInput.value = "";
-      setFilterStatus("Cleared DIM search", "ok");
-    } else {
-      setFilterStatus(payload?.error ?? "Clear failed", "err");
-    }
-  } catch (err) {
-    setFilterStatus(`Clear error: ${String(err)}`, "err");
-  }
-}
-
-async function loadVault(): Promise<void> {
-  setVaultStatus("Loading vault…");
-  try {
-    const res = await browser.runtime.sendMessage(createEnvelope("vault-get", newRequestId()));
-    if (!isEnvelope(res) || res.kind !== "vault-result") {
-      setVaultStatus("Vault load failed: bad response", "err");
-      vaultItems = [];
-      renderVaultList();
-      return;
-    }
-    const status = res.payload as InventoryStatus;
-    if (status.state === "ok") {
-      vaultItems = status.items;
-      setVaultStatus(`Vault: ${status.items.length} items (membership ${status.membershipId})`, "ok");
-    } else {
-      vaultItems = [];
-      setVaultStatus(status.message, "err");
-    }
-    renderVaultList();
-  } catch (err) {
-    vaultItems = [];
-    setVaultStatus(`Vault error: ${String(err)}`, "err");
-    renderVaultList();
-  }
-}
-
-async function loadTrash(): Promise<void> {
-  try {
-    const res = await browser.runtime.sendMessage(createEnvelope("trash-get", newRequestId()));
-    if (!isEnvelope(res) || res.kind !== "trash-result") {
-      setTrashStatus("Trash load failed", "err");
-      return;
-    }
-    const payload = res.payload as { state?: TrashState };
-    trashItems = payload.state?.items ?? [];
-    selectedTrashIds.clear();
-    setTrashStatus(`Trash: ${trashItems.length} staged (not deleted from Destiny)`, "ok");
-    renderTrashList();
-  } catch (err) {
-    setTrashStatus(`Trash error: ${String(err)}`, "err");
-  }
-}
-
-async function stageSelected(): Promise<void> {
-  // No confirmation modal — Stage is intentional and reversible via Unstage.
-  const candidates: StageCandidate[] = vaultItems
-    .filter((v) => selectedVaultIds.has(v.id))
-    .map((v) => {
-      const c: StageCandidate = {
-        id: v.id,
-        itemHash: v.itemHash,
-        name: v.name,
-      };
-      if (v.tierType !== undefined) c.tierType = v.tierType;
-      if (v.itemType !== undefined) c.itemType = v.itemType;
-      if (v.isExotic !== undefined) c.isExotic = v.isExotic;
-      if (v.tag !== undefined) c.tag = v.tag;
-      return c;
-    });
-  if (candidates.length === 0) {
-    setTrashStatus("Select vault items to stage", "err");
-    return;
-  }
-  try {
-    const res = await browser.runtime.sendMessage(
-      createEnvelope("trash-stage", newRequestId(), { candidates }),
-    );
-    if (!isEnvelope(res) || res.kind !== "trash-result") {
-      setTrashStatus("Stage failed", "err");
-      return;
-    }
-    const payload = res.payload as {
-      state?: TrashState;
-      result?: { staged: TrashRecord[]; denied: Array<{ id: string; reason: string }> };
-    };
-    trashItems = payload.state?.items ?? [];
-    selectedVaultIds.clear();
-    const stagedN = payload.result?.staged.length ?? 0;
-    const denied = payload.result?.denied ?? [];
-    let msg = TRASH_SAFE_COPY.stagedOk(stagedN);
-    if (denied.length) {
-      msg += ` Denied ${denied.length} (exotic/favorite/already).`;
-    }
-    setTrashStatus(msg, stagedN > 0 ? "ok" : "err");
-    renderTrashList();
-    renderVaultList();
-  } catch (err) {
-    setTrashStatus(`Stage error: ${String(err)}`, "err");
-  }
-}
-
-async function unstageSelected(): Promise<void> {
-  const ids = [...selectedTrashIds];
-  if (ids.length === 0) {
-    setTrashStatus("Select Trash items to unstage", "err");
-    return;
-  }
-  try {
-    const res = await browser.runtime.sendMessage(
-      createEnvelope("trash-unstage", newRequestId(), { ids }),
-    );
-    if (!isEnvelope(res) || res.kind !== "trash-result") {
-      setTrashStatus("Unstage failed", "err");
-      return;
-    }
-    const payload = res.payload as { state?: TrashState; removed?: TrashRecord[] };
-    trashItems = payload.state?.items ?? [];
-    selectedTrashIds.clear();
-    setTrashStatus(`Unstaged ${payload.removed?.length ?? 0}. Still not a Destiny delete.`, "ok");
-    renderTrashList();
-  } catch (err) {
-    setTrashStatus(`Unstage error: ${String(err)}`, "err");
-  }
-}
-
-function setAgentStatus(text: string, state: StatusState = "idle"): void {
-  setElStatus(agentStatusEl, text, state);
-}
-
 function renderRecs(recs: AgentRecommendation[]): void {
   if (!agentRecsEl) return;
   agentRecsEl.replaceChildren();
@@ -383,105 +184,162 @@ function renderRecs(recs: AgentRecommendation[]): void {
   }
 }
 
-async function saveApiKey(): Promise<void> {
-  const apiKey = (apiKeyInput?.value ?? "").trim();
-  // Empty field after mask clear must not wipe the stored key.
-  if (!apiKey || apiKey === "••••••••") {
-    setAgentStatus("Enter a new API key to update (empty save ignored)", "err");
+async function runRoundTrip(): Promise<void> {
+  const token = newRequestId();
+  setStatus("Round-trip in progress…");
+  if (logEl) {
+    logEl.hidden = false;
+    logEl.textContent = `token=${token}\n…`;
+  }
+  const out = await client.roundTrip(token);
+  if (out.ok) {
+    setStatus(`Round-trip OK: ${out.hops.join(" → ")}`, "ok");
+    if (logEl) logEl.textContent = JSON.stringify({ token: out.token, hops: out.hops, ok: true }, null, 2);
+  } else {
+    setStatus(`Round-trip incomplete (is DIM open with Light?). ${out.error}`, "err");
+  }
+}
+
+async function applyFilter(): Promise<void> {
+  const query = filterInput?.value ?? "";
+  setFilterStatus("Applying…");
+  const out = await client.applyFilter(query);
+  if (out.ok) setFilterStatus(`Applied to DIM: ${out.query || "(empty)"}`, "ok");
+  else setFilterStatus(out.error, "err");
+}
+
+async function clearFilter(): Promise<void> {
+  setFilterStatus("Clearing…");
+  const out = await client.clearFilter();
+  if (out.ok) {
+    if (filterInput) filterInput.value = "";
+    setFilterStatus("Cleared DIM search", "ok");
+  } else {
+    setFilterStatus(out.error, "err");
+  }
+}
+
+async function loadVault(): Promise<void> {
+  setVaultStatus("Loading vault…");
+  const out = await client.loadVault();
+  if (!out.ok) {
+    vaultItems = [];
+    setVaultStatus(`Vault error: ${out.error}`, "err");
+    renderVaultList();
     return;
   }
-  const res = await browser.runtime.sendMessage(
-    createEnvelope("agent-settings-set", newRequestId(), { apiKey }),
-  );
-  if (isEnvelope(res) && res.kind === "agent-settings-result") {
+  vaultItems = out.items;
+  if (out.status.state === "ok") {
+    setVaultStatus(`Vault: ${out.items.length} items (membership ${out.status.membershipId})`, "ok");
+  } else if (out.status.state === "empty" || out.status.state === "error") {
+    setVaultStatus(out.status.message, "err");
+  }
+  renderVaultList();
+}
+
+async function loadTrash(): Promise<void> {
+  const out = await client.loadTrash();
+  if (!out.ok) {
+    setTrashStatus(out.error, "err");
+    return;
+  }
+  trashItems = out.items;
+  selectedTrashIds.clear();
+  setTrashStatus(`Trash: ${trashItems.length} staged (not deleted from Destiny)`, "ok");
+  renderTrashList();
+}
+
+async function stageSelected(): Promise<void> {
+  // No confirmation modal — Stage is intentional and reversible via Unstage.
+  const out = await client.stage(vaultItems, selectedVaultIds);
+  if (!out.ok) {
+    setTrashStatus(out.error, "err");
+    return;
+  }
+  trashItems = out.items;
+  selectedVaultIds.clear();
+  let msg = TRASH_SAFE_COPY.stagedOk(out.staged.length);
+  if (out.denied.length) {
+    msg += ` Denied ${out.denied.length} (exotic/favorite/already).`;
+  }
+  setTrashStatus(msg, out.staged.length > 0 ? "ok" : "err");
+  renderTrashList();
+  renderVaultList();
+}
+
+async function unstageSelected(): Promise<void> {
+  const out = await client.unstage([...selectedTrashIds]);
+  if (!out.ok) {
+    setTrashStatus(out.error, "err");
+    return;
+  }
+  trashItems = out.items;
+  selectedTrashIds.clear();
+  setTrashStatus(`Unstaged ${out.removed.length}. Still not a Destiny delete.`, "ok");
+  renderTrashList();
+}
+
+async function saveApiKey(): Promise<void> {
+  const out = await client.saveApiKey(apiKeyInput?.value ?? "");
+  if (out.ok) {
     setAgentStatus("API key saved in extension storage (not logged)", "ok");
     if (apiKeyInput) {
       apiKeyInput.value = "";
       apiKeyInput.placeholder = "•••••••• (saved)";
     }
   } else {
-    setAgentStatus("Failed to save API key", "err");
+    setAgentStatus(out.error, "err");
   }
 }
 
 async function runAgentLoop(): Promise<void> {
-  const intention = intentionInput?.value ?? "";
-  const optIn = vaultOptIn?.checked === true;
   setAgentStatus("Running agent…");
-  // Vault dump only when checkbox opt-in for this run.
-  const vaultSlice = optIn
-    ? vaultItems.slice(0, 200).map((v) => {
-        const row: {
-          id: string;
-          itemHash: number;
-          name: string;
-          tierType?: string;
-          tag?: string;
-        } = { id: v.id, itemHash: v.itemHash, name: v.name };
-        if (v.tierType !== undefined) row.tierType = v.tierType;
-        if (v.tag !== undefined) row.tag = v.tag;
-        return row;
-      })
-    : undefined;
-
-  try {
-    const payload: {
-      intention: string;
-      vaultContextOptIn: boolean;
-      vaultSlice?: typeof vaultSlice;
-    } = {
-      intention,
-      vaultContextOptIn: optIn,
-    };
-    if (optIn && vaultSlice) payload.vaultSlice = vaultSlice;
-
-    const res = await browser.runtime.sendMessage(
-      createEnvelope("agent-run", newRequestId(), payload),
-    );
-    if (!isEnvelope(res) || res.kind !== "agent-result") {
-      setAgentStatus("Agent failed: bad response", "err");
-      return;
-    }
-    const body = res.payload as {
-      ok?: boolean;
-      cancelled?: boolean;
-      error?: string;
-      result?: AgentResult;
-    };
-    if (body.cancelled) {
-      setAgentStatus("Agent cancelled", "err");
-      return;
-    }
-    if (!body.ok || !body.result) {
-      setAgentStatus(body.error ?? "Agent failed", "err");
-      return;
-    }
-    const result = body.result;
-    if (filterInput && result.filters[0]) {
-      filterInput.value = result.filters.join(" ");
-    }
-    if (agentExplanationEl) {
-      agentExplanationEl.textContent = result.explanation || "—";
-    }
-    renderRecs(result.recommendations);
-    setAgentStatus(
-      `Agent done — ${result.filters.length} filter(s), ${result.recommendations.length} rec(s). Stage is manual.`,
-      "ok",
-    );
-  } catch (err) {
-    setAgentStatus(`Agent error: ${String(err)}`, "err");
+  const out = await client.runAgent({
+    intention: intentionInput?.value ?? "",
+    vaultContextOptIn: vaultOptIn?.checked === true,
+    vaultItems,
+  });
+  if (!out.ok) {
+    setAgentStatus(out.error === "cancelled" ? "Agent cancelled" : out.error, "err");
+    return;
   }
+  const result = out.result;
+  if (filterInput && result.filters[0]) {
+    filterInput.value = result.filters.join(" ");
+  }
+  if (agentExplanationEl) {
+    agentExplanationEl.textContent = result.explanation || "—";
+  }
+  renderRecs(result.recommendations);
+  setAgentStatus(
+    `Agent done — ${result.filters.length} filter(s), ${result.recommendations.length} rec(s). Stage is manual.`,
+    "ok",
+  );
 }
 
 async function cancelAgent(): Promise<void> {
-  await browser.runtime.sendMessage(createEnvelope("agent-cancel", newRequestId()));
+  await client.cancelAgent();
   setAgentStatus("Cancel requested", "err");
+}
+
+async function repairMirror(): Promise<void> {
+  const out = await client.repairMirror();
+  if (!out.ok) {
+    setTrashStatus(out.error, "err");
+    return;
+  }
+  trashItems = out.items;
+  setTrashStatus(
+    `Repair Mirror: ${out.repaired.length} row(s) attempted (Trash never rolled back)`,
+    "ok",
+  );
+  renderTrashList();
 }
 
 async function init(): Promise<void> {
   if (trashHelpEl) trashHelpEl.textContent = TRASH_SAFE_COPY.sectionHelp;
 
-  const ok = await pingBackground();
+  const ok = await client.ping();
   setStatus(ok ? "Background connected" : "Background not reachable", ok ? "ok" : "err");
   btn?.addEventListener("click", () => {
     void runRoundTrip();
@@ -520,26 +378,7 @@ async function init(): Promise<void> {
     void cancelAgent();
   });
   btnRepairMirror?.addEventListener("click", () => {
-    void (async () => {
-      try {
-        const res = await browser.runtime.sendMessage(
-          createEnvelope("trash-repair-mirror", newRequestId()),
-        );
-        if (!isEnvelope(res) || res.kind !== "trash-result") {
-          setTrashStatus("Repair Mirror failed", "err");
-          return;
-        }
-        const payload = res.payload as { state?: TrashState; repaired?: TrashRecord[] };
-        trashItems = payload.state?.items ?? [];
-        setTrashStatus(
-          `Repair Mirror: ${payload.repaired?.length ?? 0} row(s) attempted (Trash never rolled back)`,
-          "ok",
-        );
-        renderTrashList();
-      } catch (err) {
-        setTrashStatus(`Repair error: ${String(err)}`, "err");
-      }
-    })();
+    void repairMirror();
   });
   vaultListEl?.addEventListener(
     "scroll",
