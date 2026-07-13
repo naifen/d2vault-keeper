@@ -12,7 +12,12 @@
   "permissions": ["storage"],
   "host_permissions": [
     "*://*.destinyitemmanager.com/*",
-    "*://destinyitemmanager.com/*"
+    "*://destinyitemmanager.com/*",
+    "https://openrouter.ai/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*"
   ],
   "background": {
     "scripts": ["background.js"],

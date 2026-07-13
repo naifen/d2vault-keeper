@@ -24,6 +24,12 @@ export type MessageKind =
   | "mirror-set"
   | "mirror-clear"
   | "mirror-result"
+  | "agent-run"
+  | "agent-cancel"
+  | "agent-result"
+  | "agent-settings-get"
+  | "agent-settings-set"
+  | "agent-settings-result"
   | "error";
 
 export interface FilterApplyPayload {

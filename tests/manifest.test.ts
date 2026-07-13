@@ -24,16 +24,18 @@ describe("manifest permissions and shell", () => {
     expect(manifest.background.type).toBe("module");
   });
 
-  it("permissions limited to storage + DIM host", () => {
+  it("permissions: storage; hosts DIM + OpenRouter (no Bungie OAuth/tabs)", () => {
     expect(manifest.permissions).toEqual(["storage"]);
-    for (const host of manifest.host_permissions) {
-      expect(host).toMatch(/destinyitemmanager\.com/);
-    }
-    // No broad <all_urls>, tabs, or identity/oauth.
+    // No tabs / identity / Bungie OAuth.
     expect(manifest.permissions).not.toContain("tabs");
     expect(manifest.permissions).not.toContain("identity");
     expect(manifest.permissions).not.toContain("<all_urls>");
     expect(manifest.host_permissions.some((h) => h.includes("<all_urls>"))).toBe(false);
+    expect(
+      manifest.host_permissions.some((h) => h.includes("destinyitemmanager.com")),
+    ).toBe(true);
+    // Agent BYO OpenRouter-compatible default host (#22).
+    expect(manifest.host_permissions.some((h) => h.includes("openrouter.ai"))).toBe(true);
   });
 
   it("declares Light content script on DIM", () => {
@@ -50,7 +52,8 @@ describe("manifest permissions and shell", () => {
   });
 
   it("DIM URL patterns stay aligned with background query list", () => {
-    expect([...manifest.host_permissions].sort()).toEqual([...DIM_URL_PATTERNS].sort());
+    const dimHosts = manifest.host_permissions.filter((h) => h.includes("destinyitemmanager.com"));
+    expect([...dimHosts].sort()).toEqual([...DIM_URL_PATTERNS].sort());
     expect([...manifest.content_scripts[0]!.matches].sort()).toEqual([...DIM_URL_PATTERNS].sort());
   });
 });

@@ -22,6 +22,13 @@ import {
 } from "./trash-handlers.js";
 import type { StageCandidate } from "../trash/index.js";
 import { createMessagingMirrorBridge } from "../dim-bridge/index.js";
+import {
+  handleAgentCancel,
+  handleAgentRun,
+  handleAgentSettingsGet,
+  handleAgentSettingsSet,
+} from "./agent-handlers.js";
+import type { AgentRequest, AgentSettings } from "../agent/index.js";
 
 async function queryDimTabs(): Promise<browser.tabs.Tab[]> {
   return browser.tabs.query({ url: [...DIM_URL_PATTERNS] });
@@ -134,6 +141,24 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
       }
       case "trash-repair-mirror": {
         sendResponse(await handleRepairMirror(message.requestId));
+        return;
+      }
+      case "agent-settings-get": {
+        sendResponse(await handleAgentSettingsGet(message.requestId));
+        return;
+      }
+      case "agent-settings-set": {
+        const partial = (message.payload ?? {}) as Partial<AgentSettings>;
+        sendResponse(await handleAgentSettingsSet(message.requestId, partial));
+        return;
+      }
+      case "agent-run": {
+        const req = (message.payload ?? {}) as AgentRequest;
+        sendResponse(await handleAgentRun(message.requestId, req));
+        return;
+      }
+      case "agent-cancel": {
+        sendResponse(handleAgentCancel(message.requestId));
         return;
       }
       default: {

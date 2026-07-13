@@ -19,9 +19,28 @@
       <pre id="roundtrip-log" class="wb-log" hidden></pre>
     </section>
 
-    <section class="wb-section wb-placeholder" id="section-intention" aria-label="Intention">
+    <section class="wb-section" id="section-intention" aria-label="Intention">
       <h2>Intention</h2>
-      <p class="wb-muted">Agent loop lands in a later ticket.</p>
+      <label class="wb-label" for="api-key">OpenRouter-compatible API key</label>
+      <div class="wb-row">
+        <input id="api-key" class="wb-input" type="password" autocomplete="off" placeholder="sk-or-…" />
+        <button type="button" id="btn-save-key">Save key</button>
+      </div>
+      <label class="wb-label" for="intention-input">Intention</label>
+      <textarea id="intention-input" class="wb-input wb-textarea" rows="3" placeholder="e.g. junk legendary hand cannons without rampage"></textarea>
+      <label class="wb-check">
+        <input type="checkbox" id="vault-opt-in" />
+        Opt in: send vault slice to agent for this run (required for vault-aware recs)
+      </label>
+      <div class="wb-row wb-actions">
+        <button type="button" id="btn-run-agent">Run agent</button>
+        <button type="button" id="btn-cancel-agent">Cancel</button>
+      </div>
+      <p id="agent-status" class="wb-status">Agent idle</p>
+      <label class="wb-label" for="agent-explanation">Explanation</label>
+      <p id="agent-explanation" class="wb-muted">—</p>
+      <label class="wb-label" for="agent-recs">Recommendations (Stage explicitly — never auto)</label>
+      <ul id="agent-recs" class="trash-list"></ul>
     </section>
 
     <section class="wb-section" id="section-filter" aria-label="Filter and results">

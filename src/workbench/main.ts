@@ -12,6 +12,7 @@ import {
 import type { InventoryStatus, VaultItem } from "../inventory/index.js";
 import type { StageCandidate, TrashRecord, TrashState } from "../trash/index.js";
 import { TRASH_SAFE_COPY } from "../trash/index.js";
+import type { AgentRecommendation, AgentResult } from "../agent/index.js";
 import { visibleWindow } from "./virtual-list.js";
 
 const ROW_HEIGHT = 28;
@@ -33,6 +34,15 @@ const btnUnstage = document.getElementById("btn-unstage");
 const btnRefreshTrash = document.getElementById("btn-refresh-trash");
 const btnRepairMirror = document.getElementById("btn-repair-mirror");
 const trashHelpEl = document.getElementById("trash-help");
+const apiKeyInput = document.getElementById("api-key") as HTMLInputElement | null;
+const btnSaveKey = document.getElementById("btn-save-key");
+const intentionInput = document.getElementById("intention-input") as HTMLTextAreaElement | null;
+const vaultOptIn = document.getElementById("vault-opt-in") as HTMLInputElement | null;
+const btnRunAgent = document.getElementById("btn-run-agent");
+const btnCancelAgent = document.getElementById("btn-cancel-agent");
+const agentStatusEl = document.getElementById("agent-status");
+const agentExplanationEl = document.getElementById("agent-explanation");
+const agentRecsEl = document.getElementById("agent-recs");
 
 let vaultItems: VaultItem[] = [];
 let trashItems: TrashRecord[] = [];
@@ -355,6 +365,125 @@ async function unstageSelected(): Promise<void> {
   }
 }
 
+function setAgentStatus(text: string, state: "ok" | "err" | "idle" = "idle"): void {
+  if (!agentStatusEl) return;
+  agentStatusEl.textContent = text;
+  if (state === "idle") agentStatusEl.removeAttribute("data-state");
+  else agentStatusEl.setAttribute("data-state", state);
+}
+
+function renderRecs(recs: AgentRecommendation[]): void {
+  if (!agentRecsEl) return;
+  agentRecsEl.replaceChildren();
+  if (recs.length === 0) {
+    const li = document.createElement("li");
+    li.className = "wb-muted";
+    li.textContent = "No recommendations (Stage is always manual).";
+    agentRecsEl.appendChild(li);
+    return;
+  }
+  for (const r of recs) {
+    const li = document.createElement("li");
+    li.textContent = `${r.name}${r.reason ? ` — ${r.reason}` : ""} (Stage manually)`;
+    agentRecsEl.appendChild(li);
+  }
+}
+
+async function saveApiKey(): Promise<void> {
+  const apiKey = (apiKeyInput?.value ?? "").trim();
+  // Empty field after mask clear must not wipe the stored key.
+  if (!apiKey || apiKey === "••••••••") {
+    setAgentStatus("Enter a new API key to update (empty save ignored)", "err");
+    return;
+  }
+  const res = await browser.runtime.sendMessage(
+    createEnvelope("agent-settings-set", newRequestId(), { apiKey }),
+  );
+  if (isEnvelope(res) && res.kind === "agent-settings-result") {
+    setAgentStatus("API key saved in extension storage (not logged)", "ok");
+    if (apiKeyInput) {
+      apiKeyInput.value = "";
+      apiKeyInput.placeholder = "•••••••• (saved)";
+    }
+  } else {
+    setAgentStatus("Failed to save API key", "err");
+  }
+}
+
+async function runAgentLoop(): Promise<void> {
+  const intention = intentionInput?.value ?? "";
+  const optIn = vaultOptIn?.checked === true;
+  setAgentStatus("Running agent…");
+  // Vault dump only when checkbox opt-in for this run.
+  const vaultSlice = optIn
+    ? vaultItems.slice(0, 200).map((v) => {
+        const row: {
+          id: string;
+          itemHash: number;
+          name: string;
+          tierType?: string;
+          tag?: string;
+        } = { id: v.id, itemHash: v.itemHash, name: v.name };
+        if (v.tierType !== undefined) row.tierType = v.tierType;
+        if (v.tag !== undefined) row.tag = v.tag;
+        return row;
+      })
+    : undefined;
+
+  try {
+    const payload: {
+      intention: string;
+      vaultContextOptIn: boolean;
+      vaultSlice?: typeof vaultSlice;
+    } = {
+      intention,
+      vaultContextOptIn: optIn,
+    };
+    if (optIn && vaultSlice) payload.vaultSlice = vaultSlice;
+
+    const res = await browser.runtime.sendMessage(
+      createEnvelope("agent-run", newRequestId(), payload),
+    );
+    if (!isEnvelope(res) || res.kind !== "agent-result") {
+      setAgentStatus("Agent failed: bad response", "err");
+      return;
+    }
+    const body = res.payload as {
+      ok?: boolean;
+      cancelled?: boolean;
+      error?: string;
+      result?: AgentResult;
+    };
+    if (body.cancelled) {
+      setAgentStatus("Agent cancelled", "err");
+      return;
+    }
+    if (!body.ok || !body.result) {
+      setAgentStatus(body.error ?? "Agent failed", "err");
+      return;
+    }
+    const result = body.result;
+    if (filterInput && result.filters[0]) {
+      filterInput.value = result.filters.join(" ");
+    }
+    if (agentExplanationEl) {
+      agentExplanationEl.textContent = result.explanation || "—";
+    }
+    renderRecs(result.recommendations);
+    setAgentStatus(
+      `Agent done — ${result.filters.length} filter(s), ${result.recommendations.length} rec(s). Stage is manual.`,
+      "ok",
+    );
+  } catch (err) {
+    setAgentStatus(`Agent error: ${String(err)}`, "err");
+  }
+}
+
+async function cancelAgent(): Promise<void> {
+  await browser.runtime.sendMessage(createEnvelope("agent-cancel", newRequestId()));
+  setAgentStatus("Cancel requested", "err");
+}
+
 async function init(): Promise<void> {
   if (trashHelpEl) trashHelpEl.textContent = TRASH_SAFE_COPY.sectionHelp;
 
@@ -386,6 +515,15 @@ async function init(): Promise<void> {
   });
   btnRefreshTrash?.addEventListener("click", () => {
     void loadTrash();
+  });
+  btnSaveKey?.addEventListener("click", () => {
+    void saveApiKey();
+  });
+  btnRunAgent?.addEventListener("click", () => {
+    void runAgentLoop();
+  });
+  btnCancelAgent?.addEventListener("click", () => {
+    void cancelAgent();
   });
   btnRepairMirror?.addEventListener("click", () => {
     void (async () => {

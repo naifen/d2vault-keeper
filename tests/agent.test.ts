@@ -1,0 +1,170 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  buildAgentMessages,
+  buildCompletionBody,
+  createAgentController,
+  parseAgentResponse,
+  redactSettings,
+  requestIncludesVaultDump,
+  runAgent,
+  saveAgentSettings,
+  loadAgentSettings,
+  type AgentRequest,
+  type AgentSettings,
+  type KvStorage,
+} from "../src/agent/index.js";
+
+describe("parseAgentResponse", () => {
+  it("parses JSON filters + explanation + recommendations", () => {
+    const raw = JSON.stringify({
+      filters: ["is:handcannon -is:exotic"],
+      explanation: "Legendary HCs only",
+      recommendations: [{ id: "1", itemHash: 9, name: "Trust", reason: "no good perks" }],
+    });
+    const r = parseAgentResponse(raw);
+    expect(r.filters).toEqual(["is:handcannon -is:exotic"]);
+    expect(r.explanation).toMatch(/Legendary/);
+    expect(r.recommendations).toHaveLength(1);
+  });
+
+  it("parses fenced JSON", () => {
+    const r = parseAgentResponse('```json\n{"filters":["is:weapon"],"explanation":"ok"}\n```');
+    expect(r.filters).toEqual(["is:weapon"]);
+  });
+
+  it("coerces string itemHash from LLM JSON", () => {
+    const r = parseAgentResponse(
+      JSON.stringify({
+        filters: ["is:weapon"],
+        explanation: "x",
+        recommendations: [{ id: "9", itemHash: "12345", name: "Gun" }],
+      }),
+    );
+    expect(r.recommendations[0]?.itemHash).toBe(12345);
+  });
+});
+
+describe("vault opt-in gate", () => {
+  it("does not include vault dump without opt-in", () => {
+    const req: AgentRequest = {
+      intention: "junk blues",
+      vaultContextOptIn: false,
+      vaultSlice: [{ id: "1", itemHash: 1, name: "Secret" }],
+    };
+    // buildAgentMessages still sees slice only if opt-in true — runAgent strips.
+    const messages = buildAgentMessages({
+      intention: req.intention,
+      vaultContextOptIn: false,
+    });
+    const blob = JSON.stringify(messages);
+    expect(blob).not.toContain("Secret");
+    expect(blob).toMatch(/No vault dump/);
+    expect(requestIncludesVaultDump(req)).toBe(false);
+  });
+
+  it("includes vault when opted in", () => {
+    const req: AgentRequest = {
+      intention: "find junk",
+      vaultContextOptIn: true,
+      vaultSlice: [{ id: "1", itemHash: 1, name: "Trust" }],
+    };
+    expect(requestIncludesVaultDump(req)).toBe(true);
+    expect(JSON.stringify(buildAgentMessages(req))).toContain("Trust");
+  });
+});
+
+describe("runAgent mocked HTTP", () => {
+  const settings: AgentSettings = {
+    apiKey: "test-secret-key",
+    baseUrl: "https://example.test/v1",
+    model: "test-model",
+  };
+
+  it("returns parsed result and never logs key", async () => {
+    const fetchFn = vi.fn(async (_url: string, init?: RequestInit) => {
+      const headers = init?.headers as Record<string, string>;
+      expect(headers.Authorization).toBe("Bearer test-secret-key");
+      const body = JSON.parse(String(init?.body)) as { messages: unknown[] };
+      expect(JSON.stringify(body)).not.toContain("should-not-leak");
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  filters: ["is:armor"],
+                  explanation: "armor focus",
+                  recommendations: [],
+                }),
+              },
+            },
+          ],
+        }),
+      } as Response;
+    });
+
+    const result = await runAgent({
+      settings,
+      request: {
+        intention: "armor junk",
+        vaultContextOptIn: false,
+        vaultSlice: [{ id: "x", itemHash: 1, name: "should-not-leak" }],
+      },
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.filters).toEqual(["is:armor"]);
+    expect(result.explanation).toBe("armor focus");
+  });
+
+  it("cancel via AbortSignal rejects", async () => {
+    const ctrl = createAgentController();
+    const fetchFn = vi.fn((_url: string, init?: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          const err = new Error("aborted");
+          err.name = "AbortError";
+          reject(err);
+        });
+      });
+    });
+    const p = runAgent({
+      settings,
+      request: { intention: "slow", vaultContextOptIn: false },
+      signal: ctrl.signal,
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    ctrl.cancel();
+    await expect(p).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("buildCompletionBody uses model", () => {
+    const body = buildCompletionBody(settings, {
+      intention: "x",
+      vaultContextOptIn: false,
+    });
+    expect(body.model).toBe("test-model");
+  });
+});
+
+describe("settings storage + redaction", () => {
+  it("saves and loads key without redact losing it in storage", async () => {
+    const data: Record<string, unknown> = {};
+    const storage: KvStorage = {
+      async get(k) {
+        return data[k];
+      },
+      async set(k, v) {
+        data[k] = v;
+      },
+    };
+    await saveAgentSettings(storage, {
+      apiKey: "sk-secret",
+      baseUrl: "https://openrouter.ai/api/v1",
+      model: "m",
+    });
+    const loaded = await loadAgentSettings(storage);
+    expect(loaded.apiKey).toBe("sk-secret");
+    expect(redactSettings(loaded).apiKey).toBe("[redacted]");
+  });
+});
