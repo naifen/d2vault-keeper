@@ -182,3 +182,31 @@ button:hover {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+.vault-row-check {
+  margin-right: 6px;
+}
+
+.trash-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #0a0e16;
+}
+
+.trash-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #1a2130;
+  font-size: 0.8rem;
+}
+
+.trash-list li:last-child {
+  border-bottom: none;
+}

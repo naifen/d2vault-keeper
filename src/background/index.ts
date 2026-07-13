@@ -13,6 +13,12 @@ import {
 } from "../messaging/index.js";
 import { DIM_URL_PATTERNS } from "../shared/dim.js";
 import { selectLightResponse } from "./relay.js";
+import {
+  handleTrashGet,
+  handleTrashStage,
+  handleTrashUnstage,
+} from "./trash-handlers.js";
+import type { StageCandidate } from "../trash/index.js";
 
 async function queryDimTabs(): Promise<browser.tabs.Tab[]> {
   return browser.tabs.query({ url: [...DIM_URL_PATTERNS] });
@@ -97,6 +103,21 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
       }
       case "light-status": {
         sendResponse(createEnvelope("light-status", message.requestId, { ack: true }));
+        return;
+      }
+      case "trash-get": {
+        sendResponse(await handleTrashGet(message.requestId));
+        return;
+      }
+      case "trash-stage": {
+        const candidates = ((message.payload as { candidates?: StageCandidate[] } | undefined)
+          ?.candidates ?? []) as StageCandidate[];
+        sendResponse(await handleTrashStage(message.requestId, candidates));
+        return;
+      }
+      case "trash-unstage": {
+        const ids = ((message.payload as { ids?: string[] } | undefined)?.ids ?? []) as string[];
+        sendResponse(await handleTrashUnstage(message.requestId, ids));
         return;
       }
       default: {

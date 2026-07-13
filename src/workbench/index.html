@@ -54,9 +54,18 @@
       <p class="wb-muted" id="vault-hint">Vault-only items from DIM profile cache (no Bungie HTTP). Apply writes into DIM search via dim-bridge.</p>
     </section>
 
-    <section class="wb-section wb-placeholder" id="section-trash" aria-label="Trash">
+    <section class="wb-section" id="section-trash" aria-label="Trash">
       <h2>Trash</h2>
-      <p class="wb-muted">Staging lands in a later ticket. Items here are not deleted from Destiny.</p>
+      <p class="wb-muted" id="trash-help">
+        Staged for in-game dismantle. Vault Keeper never deletes items from Destiny.
+      </p>
+      <div class="wb-row wb-actions">
+        <button type="button" id="btn-stage" title="Stage selected vault items (no confirmation)">Stage selected</button>
+        <button type="button" id="btn-unstage">Unstage selected</button>
+        <button type="button" id="btn-refresh-trash">Refresh Trash</button>
+      </div>
+      <p id="trash-status" class="wb-status">Trash: —</p>
+      <ul id="trash-list" class="trash-list" aria-label="Staged items"></ul>
     </section>
 
     <script type="module" src="workbench.js"></script>

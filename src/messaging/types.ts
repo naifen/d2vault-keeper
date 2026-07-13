@@ -16,6 +16,10 @@ export type MessageKind =
   | "filter-apply"
   | "filter-clear"
   | "filter-result"
+  | "trash-get"
+  | "trash-stage"
+  | "trash-unstage"
+  | "trash-result"
   | "error";
 
 export interface FilterApplyPayload {

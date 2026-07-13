@@ -10,6 +10,8 @@ import {
   type RoundTripResultPayload,
 } from "../messaging/index.js";
 import type { InventoryStatus, VaultItem } from "../inventory/index.js";
+import type { StageCandidate, TrashRecord, TrashState } from "../trash/index.js";
+import { TRASH_SAFE_COPY } from "../trash/index.js";
 import { visibleWindow } from "./virtual-list.js";
 
 const ROW_HEIGHT = 28;
@@ -24,33 +26,48 @@ const filterInput = document.getElementById("filter-input") as HTMLInputElement 
 const filterStatusEl = document.getElementById("filter-status");
 const btnApply = document.getElementById("btn-apply-filter");
 const btnClearFilter = document.getElementById("btn-clear-filter");
+const trashListEl = document.getElementById("trash-list");
+const trashStatusEl = document.getElementById("trash-status");
+const btnStage = document.getElementById("btn-stage");
+const btnUnstage = document.getElementById("btn-unstage");
+const btnRefreshTrash = document.getElementById("btn-refresh-trash");
+const trashHelpEl = document.getElementById("trash-help");
 
 let vaultItems: VaultItem[] = [];
+let trashItems: TrashRecord[] = [];
+const selectedVaultIds = new Set<string>();
+const selectedTrashIds = new Set<string>();
 
 function setStatus(text: string, state: "ok" | "err" | "idle" = "idle"): void {
   if (!statusEl) return;
   statusEl.textContent = text;
-  if (state === "idle") {
-    statusEl.removeAttribute("data-state");
-  } else {
-    statusEl.setAttribute("data-state", state);
-  }
+  if (state === "idle") statusEl.removeAttribute("data-state");
+  else statusEl.setAttribute("data-state", state);
 }
 
 function setVaultStatus(text: string, state: "ok" | "err" | "idle" = "idle"): void {
   if (!vaultStatusEl) return;
   vaultStatusEl.textContent = text;
-  if (state === "idle") {
-    vaultStatusEl.removeAttribute("data-state");
-  } else {
-    vaultStatusEl.setAttribute("data-state", state);
-  }
+  if (state === "idle") vaultStatusEl.removeAttribute("data-state");
+  else vaultStatusEl.setAttribute("data-state", state);
+}
+
+function setFilterStatus(text: string, state: "ok" | "err" | "idle" = "idle"): void {
+  if (!filterStatusEl) return;
+  filterStatusEl.textContent = text;
+  if (state === "idle") filterStatusEl.removeAttribute("data-state");
+  else filterStatusEl.setAttribute("data-state", state);
+}
+
+function setTrashStatus(text: string, state: "ok" | "err" | "idle" = "idle"): void {
+  if (!trashStatusEl) return;
+  trashStatusEl.textContent = text;
+  if (state === "idle") trashStatusEl.removeAttribute("data-state");
+  else trashStatusEl.setAttribute("data-state", state);
 }
 
 function renderVaultList(): void {
   if (!vaultListEl) return;
-
-  // Preserve scroll: replaceChildren resets scrollTop to 0.
   const savedScrollTop = vaultListEl.scrollTop;
 
   if (vaultItems.length === 0) {
@@ -76,6 +93,15 @@ function renderVaultList(): void {
     row.setAttribute("role", "listitem");
     row.dataset.id = item.id;
 
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.className = "vault-row-check";
+    check.checked = selectedVaultIds.has(item.id);
+    check.addEventListener("change", () => {
+      if (check.checked) selectedVaultIds.add(item.id);
+      else selectedVaultIds.delete(item.id);
+    });
+
     const name = document.createElement("span");
     name.className = "vault-row-name";
     name.textContent = item.name;
@@ -91,13 +117,40 @@ function renderVaultList(): void {
     ].filter(Boolean);
     meta.textContent = bits.join(" · ") || `#${item.itemHash}`;
 
-    row.append(name, meta);
+    row.append(check, name, meta);
     windowEl.appendChild(row);
   }
 
   spacer.appendChild(windowEl);
   vaultListEl.replaceChildren(spacer);
   vaultListEl.scrollTop = savedScrollTop;
+}
+
+function renderTrashList(): void {
+  if (!trashListEl) return;
+  trashListEl.replaceChildren();
+  if (trashItems.length === 0) {
+    const li = document.createElement("li");
+    li.textContent = TRASH_SAFE_COPY.empty;
+    li.className = "wb-muted";
+    trashListEl.appendChild(li);
+    return;
+  }
+  for (const item of trashItems) {
+    const li = document.createElement("li");
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.checked = selectedTrashIds.has(item.id);
+    check.addEventListener("change", () => {
+      if (check.checked) selectedTrashIds.add(item.id);
+      else selectedTrashIds.delete(item.id);
+    });
+    const label = document.createElement("span");
+    label.textContent = item.name;
+    label.title = item.id;
+    li.append(check, label);
+    trashListEl.appendChild(li);
+  }
 }
 
 async function pingBackground(): Promise<boolean> {
@@ -118,14 +171,12 @@ async function runRoundTrip(): Promise<void> {
     logEl.hidden = false;
     logEl.textContent = `token=${token}\n…`;
   }
-
   try {
     const res = await browser.runtime.sendMessage(
       createEnvelope("roundtrip", newRequestId(), { token, hop: "workbench" }),
     );
     if (!isEnvelope(res) || res.kind !== "roundtrip-result") {
       setStatus("Round-trip failed: bad response", "err");
-      if (logEl) logEl.textContent = JSON.stringify(res, null, 2);
       return;
     }
     const payload = res.payload as RoundTripResultPayload | undefined;
@@ -141,13 +192,6 @@ async function runRoundTrip(): Promise<void> {
   } catch (err) {
     setStatus(`Round-trip error: ${String(err)}`, "err");
   }
-}
-
-function setFilterStatus(text: string, state: "ok" | "err" | "idle" = "idle"): void {
-  if (!filterStatusEl) return;
-  filterStatusEl.textContent = text;
-  if (state === "idle") filterStatusEl.removeAttribute("data-state");
-  else filterStatusEl.setAttribute("data-state", state);
 }
 
 async function applyFilter(): Promise<void> {
@@ -175,9 +219,7 @@ async function applyFilter(): Promise<void> {
 async function clearFilter(): Promise<void> {
   setFilterStatus("Clearing…");
   try {
-    const res = await browser.runtime.sendMessage(
-      createEnvelope("filter-clear", newRequestId()),
-    );
+    const res = await browser.runtime.sendMessage(createEnvelope("filter-clear", newRequestId()));
     if (!isEnvelope(res) || res.kind !== "filter-result") {
       setFilterStatus("Clear failed: bad response", "err");
       return;
@@ -208,9 +250,6 @@ async function loadVault(): Promise<void> {
     if (status.state === "ok") {
       vaultItems = status.items;
       setVaultStatus(`Vault: ${status.items.length} items (membership ${status.membershipId})`, "ok");
-    } else if (status.state === "empty") {
-      vaultItems = [];
-      setVaultStatus(status.message, "err");
     } else {
       vaultItems = [];
       setVaultStatus(status.message, "err");
@@ -223,7 +262,98 @@ async function loadVault(): Promise<void> {
   }
 }
 
+async function loadTrash(): Promise<void> {
+  try {
+    const res = await browser.runtime.sendMessage(createEnvelope("trash-get", newRequestId()));
+    if (!isEnvelope(res) || res.kind !== "trash-result") {
+      setTrashStatus("Trash load failed", "err");
+      return;
+    }
+    const payload = res.payload as { state?: TrashState };
+    trashItems = payload.state?.items ?? [];
+    selectedTrashIds.clear();
+    setTrashStatus(`Trash: ${trashItems.length} staged (not deleted from Destiny)`, "ok");
+    renderTrashList();
+  } catch (err) {
+    setTrashStatus(`Trash error: ${String(err)}`, "err");
+  }
+}
+
+async function stageSelected(): Promise<void> {
+  // No confirmation modal — Stage is intentional and reversible via Unstage.
+  const candidates: StageCandidate[] = vaultItems
+    .filter((v) => selectedVaultIds.has(v.id))
+    .map((v) => {
+      const c: StageCandidate = {
+        id: v.id,
+        itemHash: v.itemHash,
+        name: v.name,
+      };
+      if (v.tierType !== undefined) c.tierType = v.tierType;
+      if (v.itemType !== undefined) c.itemType = v.itemType;
+      if (v.isExotic !== undefined) c.isExotic = v.isExotic;
+      if (v.tag !== undefined) c.tag = v.tag;
+      return c;
+    });
+  if (candidates.length === 0) {
+    setTrashStatus("Select vault items to stage", "err");
+    return;
+  }
+  try {
+    const res = await browser.runtime.sendMessage(
+      createEnvelope("trash-stage", newRequestId(), { candidates }),
+    );
+    if (!isEnvelope(res) || res.kind !== "trash-result") {
+      setTrashStatus("Stage failed", "err");
+      return;
+    }
+    const payload = res.payload as {
+      state?: TrashState;
+      result?: { staged: TrashRecord[]; denied: Array<{ id: string; reason: string }> };
+    };
+    trashItems = payload.state?.items ?? [];
+    selectedVaultIds.clear();
+    const stagedN = payload.result?.staged.length ?? 0;
+    const denied = payload.result?.denied ?? [];
+    let msg = TRASH_SAFE_COPY.stagedOk(stagedN);
+    if (denied.length) {
+      msg += ` Denied ${denied.length} (exotic/favorite/already).`;
+    }
+    setTrashStatus(msg, stagedN > 0 ? "ok" : "err");
+    renderTrashList();
+    renderVaultList();
+  } catch (err) {
+    setTrashStatus(`Stage error: ${String(err)}`, "err");
+  }
+}
+
+async function unstageSelected(): Promise<void> {
+  const ids = [...selectedTrashIds];
+  if (ids.length === 0) {
+    setTrashStatus("Select Trash items to unstage", "err");
+    return;
+  }
+  try {
+    const res = await browser.runtime.sendMessage(
+      createEnvelope("trash-unstage", newRequestId(), { ids }),
+    );
+    if (!isEnvelope(res) || res.kind !== "trash-result") {
+      setTrashStatus("Unstage failed", "err");
+      return;
+    }
+    const payload = res.payload as { state?: TrashState; removed?: TrashRecord[] };
+    trashItems = payload.state?.items ?? [];
+    selectedTrashIds.clear();
+    setTrashStatus(`Unstaged ${payload.removed?.length ?? 0}. Still not a Destiny delete.`, "ok");
+    renderTrashList();
+  } catch (err) {
+    setTrashStatus(`Unstage error: ${String(err)}`, "err");
+  }
+}
+
 async function init(): Promise<void> {
+  if (trashHelpEl) trashHelpEl.textContent = TRASH_SAFE_COPY.sectionHelp;
+
   const ok = await pingBackground();
   setStatus(ok ? "Background connected" : "Background not reachable", ok ? "ok" : "err");
   btn?.addEventListener("click", () => {
@@ -244,16 +374,30 @@ async function init(): Promise<void> {
       void applyFilter();
     }
   });
-  vaultListEl?.addEventListener("scroll", () => {
-    renderVaultList();
-  }, { passive: true });
+  btnStage?.addEventListener("click", () => {
+    void stageSelected();
+  });
+  btnUnstage?.addEventListener("click", () => {
+    void unstageSelected();
+  });
+  btnRefreshTrash?.addEventListener("click", () => {
+    void loadTrash();
+  });
+  vaultListEl?.addEventListener(
+    "scroll",
+    () => {
+      renderVaultList();
+    },
+    { passive: true },
+  );
 
-  // Refresh on tab focus (no background pollers).
   window.addEventListener("focus", () => {
     void loadVault();
+    void loadTrash();
   });
 
   void loadVault();
+  void loadTrash();
 }
 
 void init();
