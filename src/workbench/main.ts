@@ -49,32 +49,29 @@ let trashItems: TrashRecord[] = [];
 const selectedVaultIds = new Set<string>();
 const selectedTrashIds = new Set<string>();
 
-function setStatus(text: string, state: "ok" | "err" | "idle" = "idle"): void {
-  if (!statusEl) return;
-  statusEl.textContent = text;
-  if (state === "idle") statusEl.removeAttribute("data-state");
-  else statusEl.setAttribute("data-state", state);
+type StatusState = "ok" | "err" | "idle";
+
+function setElStatus(el: Element | null, text: string, state: StatusState = "idle"): void {
+  if (!el) return;
+  el.textContent = text;
+  if (state === "idle") el.removeAttribute("data-state");
+  else el.setAttribute("data-state", state);
 }
 
-function setVaultStatus(text: string, state: "ok" | "err" | "idle" = "idle"): void {
-  if (!vaultStatusEl) return;
-  vaultStatusEl.textContent = text;
-  if (state === "idle") vaultStatusEl.removeAttribute("data-state");
-  else vaultStatusEl.setAttribute("data-state", state);
+function setStatus(text: string, state: StatusState = "idle"): void {
+  setElStatus(statusEl, text, state);
 }
 
-function setFilterStatus(text: string, state: "ok" | "err" | "idle" = "idle"): void {
-  if (!filterStatusEl) return;
-  filterStatusEl.textContent = text;
-  if (state === "idle") filterStatusEl.removeAttribute("data-state");
-  else filterStatusEl.setAttribute("data-state", state);
+function setVaultStatus(text: string, state: StatusState = "idle"): void {
+  setElStatus(vaultStatusEl, text, state);
 }
 
-function setTrashStatus(text: string, state: "ok" | "err" | "idle" = "idle"): void {
-  if (!trashStatusEl) return;
-  trashStatusEl.textContent = text;
-  if (state === "idle") trashStatusEl.removeAttribute("data-state");
-  else trashStatusEl.setAttribute("data-state", state);
+function setFilterStatus(text: string, state: StatusState = "idle"): void {
+  setElStatus(filterStatusEl, text, state);
+}
+
+function setTrashStatus(text: string, state: StatusState = "idle"): void {
+  setElStatus(trashStatusEl, text, state);
 }
 
 function renderVaultList(): void {
@@ -365,11 +362,8 @@ async function unstageSelected(): Promise<void> {
   }
 }
 
-function setAgentStatus(text: string, state: "ok" | "err" | "idle" = "idle"): void {
-  if (!agentStatusEl) return;
-  agentStatusEl.textContent = text;
-  if (state === "idle") agentStatusEl.removeAttribute("data-state");
-  else agentStatusEl.setAttribute("data-state", state);
+function setAgentStatus(text: string, state: StatusState = "idle"): void {
+  setElStatus(agentStatusEl, text, state);
 }
 
 function renderRecs(recs: AgentRecommendation[]): void {

@@ -53,4 +53,48 @@ describe("createBrowserIdbKeyval safety", () => {
     expect(value).toEqual({ ok: true });
     expect(openDb).toHaveBeenCalledWith(IDB_DB_NAME);
   });
+
+  it("retries open after an earlier missing-DB failure (does not cache reject)", async () => {
+    const storeGet = vi.fn((_key: string) => {
+      const req = {
+        result: { ok: true },
+        onerror: null as ((this: unknown, ev: Event) => void) | null,
+        onsuccess: null as ((this: unknown, ev: Event) => void) | null,
+      };
+      queueMicrotask(() => req.onsuccess?.call(req, {} as Event));
+      return req;
+    });
+    const fakeDb = {
+      objectStoreNames: { contains: (n: string) => n === "keyval" },
+      transaction: () => ({
+        objectStore: () => ({ get: storeGet }),
+      }),
+      close: vi.fn(),
+    };
+    const openDb = vi.fn((_name: string) => {
+      const req = {
+        result: fakeDb,
+        error: null,
+        transaction: null,
+        onerror: null as ((this: unknown, ev: Event) => void) | null,
+        onsuccess: null as ((this: unknown, ev: Event) => void) | null,
+        onupgradeneeded: null as ((this: unknown, ev: Event) => void) | null,
+        onblocked: null as ((this: unknown, ev: Event) => void) | null,
+      };
+      queueMicrotask(() => req.onsuccess?.call(req, {} as Event));
+      return req as unknown as IDBOpenDBRequest;
+    });
+
+    let present = false;
+    const listDatabases = vi.fn(async () =>
+      present ? [{ name: IDB_DB_NAME, version: 1 }] : [{ name: "other", version: 1 }],
+    );
+    const idb = createBrowserIdbKeyval(openDb, listDatabases);
+
+    await expect(idb.get("profile-1")).rejects.toThrow(/Open DIM logged in/i);
+    present = true;
+    const value = await idb.get<{ ok: boolean }>("profile-1");
+    expect(value).toEqual({ ok: true });
+    expect(openDb).toHaveBeenCalledTimes(1);
+  });
 });

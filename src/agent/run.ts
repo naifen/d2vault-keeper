@@ -3,18 +3,11 @@
  * API key never logged.
  */
 
-import { buildCompletionBody, requestIncludesVaultDump } from "./build-request.js";
+import { buildCompletionBody } from "./build-request.js";
 import { parseAgentResponse } from "./parse.js";
 import type { AgentRequest, AgentResult, AgentSettings } from "./types.js";
 
 export type FetchFn = typeof fetch;
-
-export class AgentCancelledError extends Error {
-  constructor() {
-    super("Agent request cancelled");
-    this.name = "AgentCancelledError";
-  }
-}
 
 export interface RunAgentOptions {
   settings: AgentSettings;
@@ -38,10 +31,6 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
   const safeRequest: AgentRequest = request.vaultContextOptIn
     ? request
     : { intention: request.intention, vaultContextOptIn: false };
-
-  if (!safeRequest.vaultContextOptIn && requestIncludesVaultDump(request)) {
-    // Should not happen after strip — belt and suspenders.
-  }
 
   const url = `${settings.baseUrl.replace(/\/$/, "")}/chat/completions`;
   const body = buildCompletionBody(settings, safeRequest);

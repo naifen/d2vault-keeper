@@ -5,6 +5,7 @@ import {
   saveAgentSettings,
   type AgentRequest,
   type AgentSettings,
+  type FetchFn,
   type KvStorage,
 } from "../agent/index.js";
 import { createEnvelope, type Envelope } from "../messaging/index.js";
@@ -64,35 +65,54 @@ export async function handleAgentSettingsSet(
   });
 }
 
+function isAbortError(err: unknown): boolean {
+  return (
+    (err instanceof Error && err.name === "AbortError") ||
+    (typeof DOMException !== "undefined" && err instanceof DOMException && err.name === "AbortError")
+  );
+}
+
 export async function handleAgentRun(
   requestId: string,
   request: AgentRequest,
+  /** Test seam: inject fetch (production uses global fetch). */
+  fetchFn?: FetchFn,
 ): Promise<Envelope> {
   if (activeCancel) {
     activeCancel();
     activeCancel = null;
   }
-  const settings = await loadAgentSettings(storageLocal());
+  // Register cancel before any await so Cancel during settings load still aborts this run.
   const ctrl = createAgentController();
   activeCancel = ctrl.cancel;
   try {
+    const settings = await loadAgentSettings(storageLocal());
+    if (ctrl.signal.aborted) {
+      return createEnvelope("agent-result", requestId, {
+        ok: false,
+        cancelled: true,
+        error: "cancelled",
+      });
+    }
     const result = await runAgent({
       settings,
       request,
       signal: ctrl.signal,
+      ...(fetchFn ? { fetchFn } : {}),
     });
     return createEnvelope("agent-result", requestId, { ok: true, result });
   } catch (err) {
-    const aborted =
-      (err instanceof Error && err.name === "AbortError") ||
-      (typeof DOMException !== "undefined" && err instanceof DOMException && err.name === "AbortError");
+    const aborted = isAbortError(err);
     return createEnvelope("agent-result", requestId, {
       ok: false,
       cancelled: aborted,
       error: aborted ? "cancelled" : err instanceof Error ? err.message : String(err),
     });
   } finally {
-    activeCancel = null;
+    // Only clear if we still own the slot — a newer run must keep its cancel handle.
+    if (activeCancel === ctrl.cancel) {
+      activeCancel = null;
+    }
   }
 }
 

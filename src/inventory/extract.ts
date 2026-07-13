@@ -12,6 +12,7 @@ import {
   type DestinyProfileResponseLike,
   type VaultItem,
 } from "./types.js";
+import { TIER_TYPE_EXOTIC } from "./enrichment.js";
 
 export interface ExtractOptions {
   definitions?: DefinitionMap;
@@ -74,7 +75,7 @@ export function extractVaultItems(
     if (def?.tierTypeName) vaultItem.tierType = def.tierTypeName;
     if (def?.itemTypeDisplayName) vaultItem.itemType = def.itemTypeDisplayName;
     if (power !== undefined) vaultItem.power = power;
-    if (def?.tierType === 6) vaultItem.isExotic = true;
+    if (def?.tierType === TIER_TYPE_EXOTIC) vaultItem.isExotic = true;
 
     out.push(vaultItem);
   }

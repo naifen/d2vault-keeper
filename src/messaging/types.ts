@@ -71,6 +71,8 @@ export interface RoundTripResultPayload {
 export interface LightStatusPayload {
   present: boolean;
   href: string;
+  /** Optional DIM BroadcastChannel inventory hint (stores-updated / item-moved). */
+  inventoryHint?: string;
 }
 
 export function isEnvelope(value: unknown): value is Envelope {

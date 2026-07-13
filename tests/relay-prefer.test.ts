@@ -29,4 +29,27 @@ describe("selectLightResponse (shipped relay policy)", () => {
     });
     expect(selectLightResponse(request, [fail])).toBe(fail);
   });
+
+  it("prefers vault-result state:ok over earlier empty tab", () => {
+    const request = createEnvelope("vault-get", "3");
+    const empty = createEnvelope("vault-result", "3", {
+      state: "empty",
+      reason: "no-membership",
+      message: "no membership",
+    });
+    const ok = createEnvelope("vault-result", "3", {
+      state: "ok",
+      membershipId: "42",
+      items: [{ id: "1", itemHash: 1, quantity: 1, bucketHash: 0, name: "Gun" }],
+      source: "idb",
+    });
+    expect(selectLightResponse(request, [empty, ok])).toBe(ok);
+  });
+
+  it("prefers mirror-result ok:true over earlier failure", () => {
+    const request = createEnvelope("mirror-set", "4", { itemId: "x" });
+    const fail = createEnvelope("mirror-result", "4", { ok: false, error: "no light" });
+    const ok = createEnvelope("mirror-result", "4", { ok: true });
+    expect(selectLightResponse(request, [fail, ok])).toBe(ok);
+  });
 });
