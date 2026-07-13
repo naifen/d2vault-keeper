@@ -17,8 +17,11 @@ import {
   handleTrashGet,
   handleTrashStage,
   handleTrashUnstage,
+  handleRepairMirror,
+  setMirrorBridge,
 } from "./trash-handlers.js";
 import type { StageCandidate } from "../trash/index.js";
+import { createMessagingMirrorBridge } from "../dim-bridge/index.js";
 
 async function queryDimTabs(): Promise<browser.tabs.Tab[]> {
   return browser.tabs.query({ url: [...DIM_URL_PATTERNS] });
@@ -38,6 +41,15 @@ async function relayToLight(message: Envelope): Promise<Envelope | undefined> {
   }
   return selectLightResponse(message, responses);
 }
+
+// Best-effort Mirror: Light content script tag hooks (soft-fail when unavailable).
+setMirrorBridge(
+  createMessagingMirrorBridge(async (kind, itemId) => {
+    const res = await relayToLight(createEnvelope(kind, newRequestId(), { itemId }));
+    if (!res || res.kind !== "mirror-result") return false;
+    return (res.payload as { ok?: boolean } | undefined)?.ok === true;
+  }),
+);
 
 browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
   void (async () => {
@@ -118,6 +130,10 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
       case "trash-unstage": {
         const ids = ((message.payload as { ids?: string[] } | undefined)?.ids ?? []) as string[];
         sendResponse(await handleTrashUnstage(message.requestId, ids));
+        return;
+      }
+      case "trash-repair-mirror": {
+        sendResponse(await handleRepairMirror(message.requestId));
         return;
       }
       default: {

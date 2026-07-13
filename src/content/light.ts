@@ -19,10 +19,16 @@ import {
   readVaultInventory,
   type InventoryStatus,
 } from "../inventory/index.js";
-import { createDimBridge, defaultSearchLocator } from "../dim-bridge/index.js";
+import {
+  createDimBridge,
+  createMirrorBridgeFromHooks,
+  createSoftFailTagHooks,
+  defaultSearchLocator,
+} from "../dim-bridge/index.js";
 import { ensureChip } from "./chip.js";
 
 const bridge = createDimBridge(document, defaultSearchLocator);
+const tagBridge = createMirrorBridgeFromHooks(createSoftFailTagHooks());
 
 function announcePresence(): void {
   const payload: LightStatusPayload = {
@@ -72,6 +78,18 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
   if (message.kind === "filter-clear") {
     sendResponse(handleFilterClear(message.requestId));
     return false;
+  }
+
+  if (message.kind === "mirror-set" || message.kind === "mirror-clear") {
+    const itemId = String((message.payload as { itemId?: string } | undefined)?.itemId ?? "");
+    void (async () => {
+      const res =
+        message.kind === "mirror-set"
+          ? await tagBridge.setJunkTag(itemId)
+          : await tagBridge.clearJunkTag(itemId);
+      sendResponse(createEnvelope("mirror-result", message.requestId, res));
+    })();
+    return true;
   }
 
   const response = lightHandleMessage(message);

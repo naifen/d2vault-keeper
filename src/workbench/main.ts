@@ -31,6 +31,7 @@ const trashStatusEl = document.getElementById("trash-status");
 const btnStage = document.getElementById("btn-stage");
 const btnUnstage = document.getElementById("btn-unstage");
 const btnRefreshTrash = document.getElementById("btn-refresh-trash");
+const btnRepairMirror = document.getElementById("btn-repair-mirror");
 const trashHelpEl = document.getElementById("trash-help");
 
 let vaultItems: VaultItem[] = [];
@@ -148,7 +149,10 @@ function renderTrashList(): void {
     const label = document.createElement("span");
     label.textContent = item.name;
     label.title = item.id;
-    li.append(check, label);
+    const mirror = document.createElement("span");
+    mirror.className = "vault-row-meta";
+    mirror.textContent = `mirror:${item.mirrorStatus}`;
+    li.append(check, label, mirror);
     trashListEl.appendChild(li);
   }
 }
@@ -382,6 +386,28 @@ async function init(): Promise<void> {
   });
   btnRefreshTrash?.addEventListener("click", () => {
     void loadTrash();
+  });
+  btnRepairMirror?.addEventListener("click", () => {
+    void (async () => {
+      try {
+        const res = await browser.runtime.sendMessage(
+          createEnvelope("trash-repair-mirror", newRequestId()),
+        );
+        if (!isEnvelope(res) || res.kind !== "trash-result") {
+          setTrashStatus("Repair Mirror failed", "err");
+          return;
+        }
+        const payload = res.payload as { state?: TrashState; repaired?: TrashRecord[] };
+        trashItems = payload.state?.items ?? [];
+        setTrashStatus(
+          `Repair Mirror: ${payload.repaired?.length ?? 0} row(s) attempted (Trash never rolled back)`,
+          "ok",
+        );
+        renderTrashList();
+      } catch (err) {
+        setTrashStatus(`Repair error: ${String(err)}`, "err");
+      }
+    })();
   });
   vaultListEl?.addEventListener(
     "scroll",

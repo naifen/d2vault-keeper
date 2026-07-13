@@ -20,6 +20,10 @@ export type MessageKind =
   | "trash-stage"
   | "trash-unstage"
   | "trash-result"
+  | "trash-repair-mirror"
+  | "mirror-set"
+  | "mirror-clear"
+  | "mirror-result"
   | "error";
 
 export interface FilterApplyPayload {
