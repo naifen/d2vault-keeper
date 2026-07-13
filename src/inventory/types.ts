@@ -69,3 +69,6 @@ export const ITEM_LOCATION_VAULT = 2;
 
 /** Special Orders bucket excluded from vault store (DIM processVault). */
 export const BUCKET_SPECIAL_ORDERS = 1368870543;
+
+/** Destiny inventory tierType for Exotic. */
+export const TIER_TYPE_EXOTIC = 6;

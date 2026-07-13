@@ -9,6 +9,7 @@ export type {
 export {
   ITEM_LOCATION_VAULT,
   BUCKET_SPECIAL_ORDERS,
+  TIER_TYPE_EXOTIC,
 } from "./types.js";
 export {
   membershipProfileKey,
@@ -33,6 +34,5 @@ export {
   applyDefinitions,
   applyTags,
   DIM_API_PROFILE_KEY,
-  TIER_TYPE_EXOTIC,
   type TagByItemId,
 } from "./enrichment.js";

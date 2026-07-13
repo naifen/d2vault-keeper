@@ -5,6 +5,7 @@
  */
 
 import type { DefinitionMap, ItemDefinitionLite, VaultItem } from "./types.js";
+import { TIER_TYPE_EXOTIC } from "./types.js";
 import {
   DIM_API_PROFILE_KEY,
   extractTagsFromDimApiProfile,
@@ -12,9 +13,7 @@ import {
 } from "../dim-api-profile/index.js";
 
 export { DIM_API_PROFILE_KEY, extractTagsFromDimApiProfile, type TagByItemId };
-
-/** Destiny inventory tierType for Exotic. */
-export const TIER_TYPE_EXOTIC = 6;
+export { TIER_TYPE_EXOTIC };
 
 /** Common DIM idb-keyval keys for language tables (research: d2-manifest-*). */
 export const MANIFEST_KEY_CANDIDATES = [
