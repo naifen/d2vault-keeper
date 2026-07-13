@@ -103,24 +103,7 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
   return false;
 });
 
-try {
-  const channel = new BroadcastChannel("dim");
-  channel.addEventListener("message", (event: MessageEvent) => {
-    const data = event.data as { type?: string } | undefined;
-    if (data?.type === "stores-updated" || data?.type === "item-moved") {
-      const payload: LightStatusPayload = {
-        present: true,
-        href: location.href,
-        inventoryHint: data.type,
-      };
-      void browser.runtime
-        .sendMessage(createEnvelope("light-status", newRequestId(), payload))
-        .catch(() => undefined);
-    }
-  });
-} catch {
-  // optional
-}
+// Inventory freshness: Workbench reloads on focus/user action only (no BroadcastChannel half-seam).
 
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
