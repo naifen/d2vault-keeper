@@ -10,7 +10,6 @@ import { toStageCandidate, selectedStageCandidates } from "../src/workbench/stag
 import { emptyTrashState, stageItems } from "../src/trash/index.js";
 import type { VaultItem } from "../src/inventory/index.js";
 import { createEnvelope } from "../src/messaging/index.js";
-import { buildAgentRequest } from "../src/agent/index.js";
 
 const normal: VaultItem = {
   id: "n1",
