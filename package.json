@@ -2,7 +2,7 @@
   "name": "d2vault-keeper",
   "version": "0.1.0",
   "private": true,
-  "description": "Firefox MV3 extension: Vault Keeper for Destiny Item Manager",
+  "description": "MV3 extension (Firefox + Chromium): Vault Keeper for Destiny Item Manager",
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",

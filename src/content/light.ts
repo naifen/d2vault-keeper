@@ -1,7 +1,7 @@
 /**
  * Light trigger content-script entry (classic script; built as IIFE).
  * Hosts dim-bridge (search apply + IDB junk Mirror) + inventory IDB read.
- * Does NOT open the Workbench (Firefox user-gesture rules).
+ * Does NOT open the Workbench (browser user-gesture rules).
  */
 
 import {
@@ -28,7 +28,10 @@ import {
   createMirrorBridgeFromHooks,
   defaultSearchLocator,
 } from "../dim-bridge/index.js";
+import { ensureBrowser } from "../shared/webext.js";
 import { ensureChip } from "./chip.js";
+
+ensureBrowser();
 
 const idb = createBrowserIdbKeyval();
 const bridge = createDimBridge(document, defaultSearchLocator);

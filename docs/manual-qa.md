@@ -1,13 +1,22 @@
 # Manual QA checklist — Vault Keeper on live DIM
 
-Use this after `npm run build` and loading the temporary add-on in Firefox.
+Use this after `npm run build` and loading the temporary extension in Firefox **or** Chromium (Chrome / Edge).
 
 ## Setup
 
-1. Firefox 121+ → `about:debugging` → **This Firefox** → **Load Temporary Add-on…** → select `dist/manifest.json`.
+### Firefox
+
+1. Firefox 121+ → `about:debugging` → **This Firefox** → **Load Temporary Add-on…** → select `dist/firefox/manifest.json`.
+
+### Chrome / Edge
+
+1. Chromium 116+ → `chrome://extensions` or `edge://extensions` → **Developer mode** → **Load unpacked** → select `dist/chromium/`.
+
+### Common
+
 2. Open [DIM](https://app.destinyitemmanager.com/) and log in until inventory is warm.
 3. Confirm **VK** Light chip bottom-right on the page (status only).
-4. Open **Workbench** via toolbar button or sidebar (`_execute_sidebar_action`), **not** via the Light chip.
+4. Open **Workbench** via toolbar action (Firefox: sidebar / `_execute_sidebar_action`; Chromium: side panel via action click). **Not** via the Light chip.
 
 ## Happy path
 
@@ -27,14 +36,14 @@ Use this after `npm run build` and loading the temporary add-on in Firefox.
 | 12 | Agent | Save OpenRouter-compatible API key; Intention → **Run agent** → filters + explanation; recs listed but **no auto-Stage**. |
 | 13 | Agent opt-in | Without vault opt-in checkbox, no full vault payload is sent. |
 | 14 | Cancel agent | **Cancel** aborts in-flight request. |
-| 15 | Idle | Close Workbench sidebar; confirm no extension-driven polling (background is event-page only). DIM remains snappy. |
+| 15 | Idle | Close Workbench side surface; confirm no extension-driven polling (background is event-page / SW only). DIM remains snappy. |
 
 ## Out of scope (do not fail QA)
 
 - In-extension dismantle / game delete
 - Bungie OAuth / DIM Sync Mirror
-- Chrome packaging
+- Store listing / signed distribution (CWS / AMO / Edge Add-ons)
 
 ## Evidence for agents
 
-Live Firefox+DIM may be unavailable in CI. Automated bar: `npm test` + `npm run build` + this checklist for humans.
+Live browser+DIM may be unavailable in CI. Automated bar: `npm test` + `npm run build` + dual-manifest contract tests + this checklist for humans.

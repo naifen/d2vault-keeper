@@ -1,6 +1,6 @@
 /**
  * Workbench side panel UI.
- * Opened only via toolbar / sidebar / _execute_sidebar_action — never from Light chip.
+ * Opened only via toolbar / browser side surface — never from Light chip.
  * Domain actions go through createWorkbenchClient — this file is the DOM adapter.
  */
 
@@ -9,8 +9,11 @@ import type { TrashRecord } from "../trash/index.js";
 import { TRASH_SAFE_COPY } from "../trash/index.js";
 import type { AgentRecommendation } from "../agent/index.js";
 import { newRequestId } from "../messaging/index.js";
+import { ensureBrowser } from "../shared/webext.js";
 import { visibleWindow } from "./virtual-list.js";
 import { createWorkbenchClient } from "./client.js";
+
+ensureBrowser();
 
 const ROW_HEIGHT = 28;
 
