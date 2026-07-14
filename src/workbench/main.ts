@@ -15,12 +15,10 @@ import { createWorkbenchClient } from "./client.js";
 import { formatPerkHoverLine } from "./perk-display.js";
 import {
   filterTextFromAgentResult,
-  recRowsFromAgent,
   resultsTabAfterSuggest,
-  selectionFilterAfterStage,
-  stagePoolFromVaultAndRecs,
   type ResultsTab,
 } from "./shell-state.js";
+import { recRowsFromAgent, runStageSelection } from "./stage-selection.js";
 import { matchVaultItems } from "./match-filter.js";
 
 ensureBrowser();
@@ -399,25 +397,28 @@ async function loadTrash(): Promise<void> {
 }
 
 async function stageSelected(): Promise<void> {
-  // Snapshot selection for Selection filter rewrite before clear.
-  const selectedSnapshot = new Set(selectedVaultIds);
-  // Include Recs rows (vault-backed + agent-only) so synthetic recs can Stage by id.
-  const stagePool = stagePoolFromVaultAndRecs(vaultItems, agentRecs);
-  const filterRewrite = selectionFilterAfterStage(stagePool, selectedSnapshot);
-
-  // No confirmation modal — Stage is intentional and reversible via Unstage.
+  // Snapshot selection before clear. Deep module owns pool + filter + stage order.
   // Does NOT auto-Apply the Selection filter to DIM.
-  const out = await client.stage(stagePool, selectedSnapshot);
+  const selectedSnapshot = new Set(selectedVaultIds);
+  const outcome = await runStageSelection(
+    {
+      vaultItems,
+      recommendations: agentRecs,
+      selectedIds: selectedSnapshot,
+    },
+    (pool, ids) => client.stage(pool, ids),
+  );
+  const out = outcome.stage;
   if (!out.ok) {
     setTrashStatus(out.error, "err");
     setResultsStatus(out.error, "err");
     return;
   }
 
-  if (filterRewrite !== null && filterInput) {
-    filterInput.value = filterRewrite;
+  if (outcome.selectionFilter !== null && filterInput) {
+    filterInput.value = outcome.selectionFilter;
     setFilterStatus(
-      filterRewrite
+      outcome.selectionFilter
         ? "Selection filter updated (not applied to DIM — click Apply)"
         : "Selection had no instance ids for id: filter",
       "ok",
