@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   filterTextFromAgentResult,
+  planAfterSuggest,
   resultsTabAfterSuggest,
 } from "../src/workbench/shell-state.js";
 
@@ -112,19 +113,29 @@ describe("Suggest shell policy (pure)", () => {
     expect(filterTextFromAgentResult({ filters: [] })).toBe("");
   });
 
-  it("main Suggest path never invokes applyFilter or stage on success", () => {
-    // Structural: runSuggest fills filterInput + setResultsTab; no applyFilter/stageSelected inside runSuggest body.
-    const runSuggestStart = main.indexOf("async function runSuggest");
-    const runSuggestEnd = main.indexOf("async function cancelAgent");
-    expect(runSuggestStart).toBeGreaterThan(-1);
-    expect(runSuggestEnd).toBeGreaterThan(runSuggestStart);
-    const body = main.slice(runSuggestStart, runSuggestEnd);
-    expect(body).toMatch(/filterTextFromAgentResult/);
-    expect(body).toMatch(/resultsTabAfterSuggest/);
-    expect(body).not.toMatch(/applyFilter\(/);
-    expect(body).not.toMatch(/stageSelected\(/);
-    expect(body).not.toMatch(/client\.applyFilter/);
-    expect(body).not.toMatch(/client\.stage\(/);
+  it("planAfterSuggest fills filter + tab + recs without Apply/Stage side effects", () => {
+    const withRecs = planAfterSuggest({
+      filters: ["is:handcannon", ""],
+      explanation: "why",
+      recommendations: [{ id: "1", itemHash: 1, name: "A" }],
+    });
+    expect(withRecs.filterText).toBe("is:handcannon");
+    expect(withRecs.resultsTab).toBe("recs");
+    expect(withRecs.recommendations).toHaveLength(1);
+    expect(withRecs.explanation).toBe("why");
+
+    const noRecs = planAfterSuggest({
+      filters: [],
+      explanation: "",
+      recommendations: [],
+    });
+    expect(noRecs.filterText).toBe("");
+    expect(noRecs.resultsTab).toBe("matches");
+    expect(noRecs.explanation).toBe("—");
+
+    // Plan is data only — no Apply/Stage hooks on the shape
+    expect("applyFilter" in withRecs).toBe(false);
+    expect("stage" in withRecs).toBe(false);
   });
 
   it("Enter handlers ignore IME composition (filter Apply + intention Suggest)", () => {
