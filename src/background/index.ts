@@ -1,16 +1,16 @@
 /**
  * Background hub (Firefox event page / Chromium service worker).
  * Sleeps when idle; routes Workbench ↔ Light messages. No long polling.
+ * Light kinds → createLightRelay; local kinds → domain handlers.
  */
 
 import {
   createEnvelope,
+  createLightRelay,
   createTypedEnvelope,
   handleRoundTrip,
   isEnvelope,
   newRequestId,
-  noLightFallback,
-  selectLightResponse,
   type AgentRunPayload,
   type AgentSettingsSetPayload,
   type Envelope,
@@ -39,32 +39,15 @@ import { installWorkbenchOpenOnAction } from "./workbench-open.js";
 
 ensureBrowser();
 
-async function queryDimTabs(): Promise<browser.tabs.Tab[]> {
-  return browser.tabs.query({ url: [...DIM_URL_PATTERNS] });
-}
-
-async function relayToLight(message: Envelope): Promise<Envelope | undefined> {
-  const tabs = await queryDimTabs();
-  // Independent tabs — query in parallel; selectLightResponse picks best result.
-  const responses = await Promise.all(
-    tabs.map(async (tab): Promise<Envelope | undefined> => {
-      if (tab.id === undefined) return undefined;
-      try {
-        const response: unknown = await browser.tabs.sendMessage(tab.id, message);
-        return isEnvelope(response) ? response : undefined;
-      } catch {
-        // Tab may not have content script yet.
-        return undefined;
-      }
-    }),
-  );
-  return selectLightResponse(message, responses);
-}
+const light = createLightRelay({
+  queryDimTabs: () => browser.tabs.query({ url: [...DIM_URL_PATTERNS] }),
+  sendToTab: (tabId, message) => browser.tabs.sendMessage(tabId, message),
+});
 
 // Best-effort Mirror: Light content script tag hooks (soft-fail when unavailable).
 setMirrorBridge(
   createMessagingMirrorBridge(async (kind, itemId) => {
-    const res = await relayToLight(createTypedEnvelope(kind, newRequestId(), { itemId }));
+    const res = await light.relay(createTypedEnvelope(kind, newRequestId(), { itemId }));
     if (!res || res.kind !== "mirror-result") return false;
     return (res.payload as MirrorResultPayload | undefined)?.ok === true;
   }),
@@ -90,30 +73,20 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
       case "roundtrip": {
         const result = await handleRoundTrip(
           message as Envelope<"roundtrip", RoundTripPayload>,
-          relayToLight,
+          light.relay,
         );
         sendResponse(result);
         return;
       }
       case "vault-get": {
-        const lightRes = await relayToLight(
-          createTypedEnvelope("vault-get", message.requestId),
+        sendResponse(
+          await light.relayKind(createTypedEnvelope("vault-get", message.requestId)),
         );
-        if (lightRes && lightRes.kind === "vault-result") {
-          sendResponse(lightRes);
-        } else {
-          sendResponse(noLightFallback(message) ?? createEnvelope("error", message.requestId));
-        }
         return;
       }
       case "filter-apply":
       case "filter-clear": {
-        const lightRes = await relayToLight(message);
-        if (lightRes && lightRes.kind === "filter-result") {
-          sendResponse(lightRes);
-        } else {
-          sendResponse(noLightFallback(message) ?? createEnvelope("error", message.requestId));
-        }
+        sendResponse(await light.relayKind(message));
         return;
       }
       case "light-status": {
