@@ -5,8 +5,10 @@
  */
 
 import type { MirrorStatus, TrashRecord } from "../trash/types.js";
+import { JUNK_TAG } from "../dim-api-profile/index.js";
 
-export const MIRROR_TAG = "junk" as const;
+/** Built-in DIM junk tag — same constant as dim-api-profile tag module. */
+export const MIRROR_TAG = JUNK_TAG;
 
 export interface MirrorBridge {
   /** Best-effort set tag on item instance. */

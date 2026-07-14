@@ -5,14 +5,21 @@
 
 import {
   createEnvelope,
+  createTypedEnvelope,
   handleRoundTrip,
   isEnvelope,
   newRequestId,
+  noLightFallback,
+  selectLightResponse,
+  type AgentRunPayload,
+  type AgentSettingsSetPayload,
   type Envelope,
+  type MirrorResultPayload,
   type RoundTripPayload,
+  type TrashStagePayload,
+  type TrashUnstagePayload,
 } from "../messaging/index.js";
 import { DIM_URL_PATTERNS } from "../shared/dim.js";
-import { selectLightResponse } from "./relay.js";
 import {
   handleTrashGet,
   handleTrashStage,
@@ -20,7 +27,6 @@ import {
   handleRepairMirror,
   setMirrorBridge,
 } from "./trash-handlers.js";
-import type { StageCandidate } from "../trash/index.js";
 import { createMessagingMirrorBridge } from "../dim-bridge/index.js";
 import {
   handleAgentCancel,
@@ -28,7 +34,6 @@ import {
   handleAgentSettingsGet,
   handleAgentSettingsSet,
 } from "./agent-handlers.js";
-import type { AgentRequest, AgentSettings } from "../agent/index.js";
 
 async function queryDimTabs(): Promise<browser.tabs.Tab[]> {
   return browser.tabs.query({ url: [...DIM_URL_PATTERNS] });
@@ -55,9 +60,9 @@ async function relayToLight(message: Envelope): Promise<Envelope | undefined> {
 // Best-effort Mirror: Light content script tag hooks (soft-fail when unavailable).
 setMirrorBridge(
   createMessagingMirrorBridge(async (kind, itemId) => {
-    const res = await relayToLight(createEnvelope(kind, newRequestId(), { itemId }));
+    const res = await relayToLight(createTypedEnvelope(kind, newRequestId(), { itemId }));
     if (!res || res.kind !== "mirror-result") return false;
-    return (res.payload as { ok?: boolean } | undefined)?.ok === true;
+    return (res.payload as MirrorResultPayload | undefined)?.ok === true;
   }),
 );
 
@@ -71,7 +76,7 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
     switch (message.kind) {
       case "ping": {
         sendResponse(
-          createEnvelope("pong", message.requestId, {
+          createTypedEnvelope("pong", message.requestId, {
             from: "background",
             at: Date.now(),
           }),
@@ -88,18 +93,12 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
       }
       case "vault-get": {
         const lightRes = await relayToLight(
-          createEnvelope("vault-get", message.requestId),
+          createTypedEnvelope("vault-get", message.requestId),
         );
         if (lightRes && lightRes.kind === "vault-result") {
           sendResponse(lightRes);
         } else {
-          sendResponse(
-            createEnvelope("vault-result", message.requestId, {
-              state: "empty",
-              reason: "no-light",
-              message: "Open DIM logged in (no Light content script on a DIM tab).",
-            }),
-          );
+          sendResponse(noLightFallback(message) ?? createEnvelope("error", message.requestId));
         }
         return;
       }
@@ -109,22 +108,13 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
         if (lightRes && lightRes.kind === "filter-result") {
           sendResponse(lightRes);
         } else {
-          sendResponse(
-            createEnvelope("filter-result", message.requestId, {
-              ok: false,
-              query:
-                message.kind === "filter-apply"
-                  ? String((message.payload as { query?: string } | undefined)?.query ?? "")
-                  : "",
-              applied: false,
-              error: "Open DIM inventory (Light not reachable).",
-            }),
-          );
+          sendResponse(noLightFallback(message) ?? createEnvelope("error", message.requestId));
         }
         return;
       }
       case "light-status": {
-        sendResponse(createEnvelope("light-status", message.requestId, { ack: true }));
+        // Fire-and-forget announce from Light — ack without inventing a fake payload shape.
+        sendResponse(createEnvelope("light-status", message.requestId));
         return;
       }
       case "trash-get": {
@@ -132,13 +122,13 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
         return;
       }
       case "trash-stage": {
-        const candidates = ((message.payload as { candidates?: StageCandidate[] } | undefined)
-          ?.candidates ?? []) as StageCandidate[];
+        const candidates =
+          (message.payload as TrashStagePayload | undefined)?.candidates ?? [];
         sendResponse(await handleTrashStage(message.requestId, candidates));
         return;
       }
       case "trash-unstage": {
-        const ids = ((message.payload as { ids?: string[] } | undefined)?.ids ?? []) as string[];
+        const ids = (message.payload as TrashUnstagePayload | undefined)?.ids ?? [];
         sendResponse(await handleTrashUnstage(message.requestId, ids));
         return;
       }
@@ -151,12 +141,12 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
         return;
       }
       case "agent-settings-set": {
-        const partial = (message.payload ?? {}) as Partial<AgentSettings>;
+        const partial = (message.payload ?? {}) as AgentSettingsSetPayload;
         sendResponse(await handleAgentSettingsSet(message.requestId, partial));
         return;
       }
       case "agent-run": {
-        const req = (message.payload ?? {}) as AgentRequest;
+        const req = (message.payload ?? {}) as AgentRunPayload;
         sendResponse(await handleAgentRun(message.requestId, req));
         return;
       }

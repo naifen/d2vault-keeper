@@ -7,15 +7,12 @@
 import {
   BUCKET_SPECIAL_ORDERS,
   ITEM_LOCATION_VAULT,
-  type DefinitionMap,
   type DestinyItemComponentLike,
   type DestinyProfileResponseLike,
   type VaultItem,
 } from "./types.js";
-import { TIER_TYPE_EXOTIC } from "./enrichment.js";
 
 export interface ExtractOptions {
-  definitions?: DefinitionMap;
   /**
    * When true (default), keep items with location===Vault OR missing location
    * only if bucket is not Special Orders (legacy caches sometimes omit location).
@@ -42,13 +39,16 @@ function itemKey(item: DestinyItemComponentLike, index: number): string {
   return `stack-${item.itemHash}-${item.bucketHash ?? 0}-${index}`;
 }
 
+/**
+ * Vault membership + instance ids + power only.
+ * Definition/tier/exotic/tag enrichment is owned by enrichVaultItems (one pass).
+ */
 export function extractVaultItems(
   profile: DestinyProfileResponseLike | null | undefined,
   options: ExtractOptions = {},
 ): VaultItem[] {
   if (!profile) return [];
   const allowMissingLocation = options.allowMissingLocation !== false;
-  const defs = options.definitions;
   const raw = profile.profileInventory?.data?.items ?? [];
   const instances = profile.itemComponents?.instances?.data;
 
@@ -59,7 +59,6 @@ export function extractVaultItems(
     if (!isVaultItem(item, allowMissingLocation)) continue;
 
     const id = itemKey(item, i);
-    const def = defs?.get(item.itemHash);
     const power =
       item.itemInstanceId && instances?.[item.itemInstanceId]?.primaryStat?.value !== undefined
         ? instances[item.itemInstanceId]!.primaryStat!.value
@@ -70,12 +69,9 @@ export function extractVaultItems(
       itemHash: item.itemHash,
       quantity: item.quantity ?? 1,
       bucketHash: item.bucketHash ?? 0,
-      name: def?.name?.trim() || `#${item.itemHash}`,
+      name: `#${item.itemHash}`,
     };
-    if (def?.tierTypeName) vaultItem.tierType = def.tierTypeName;
-    if (def?.itemTypeDisplayName) vaultItem.itemType = def.itemTypeDisplayName;
     if (power !== undefined) vaultItem.power = power;
-    if (def?.tierType === TIER_TYPE_EXOTIC) vaultItem.isExotic = true;
 
     out.push(vaultItem);
   }

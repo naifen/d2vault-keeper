@@ -5,13 +5,15 @@
  */
 
 import {
-  createEnvelope,
+  createTypedEnvelope,
   isEnvelope,
   lightHandleMessage,
   newRequestId,
   type Envelope,
+  type FilterApplyPayload,
   type FilterResultPayload,
   type LightStatusPayload,
+  type MirrorItemPayload,
 } from "../messaging/index.js";
 import {
   browserLocalStorageGet,
@@ -40,7 +42,7 @@ function announcePresence(): void {
     href: location.href,
   };
   void browser.runtime
-    .sendMessage(createEnvelope("light-status", newRequestId(), payload))
+    .sendMessage(createTypedEnvelope("light-status", newRequestId(), payload))
     .catch(() => undefined);
 }
 
@@ -51,17 +53,17 @@ async function handleVaultGet(requestId: string): Promise<Envelope<"vault-result
     idb,
     enrich: true,
   });
-  return createEnvelope("vault-result", requestId, status);
+  return createTypedEnvelope("vault-result", requestId, status);
 }
 
 function handleFilterApply(requestId: string, query: string): Envelope<"filter-result", FilterResultPayload> {
   const result = bridge.applyFilter(query);
-  return createEnvelope("filter-result", requestId, result);
+  return createTypedEnvelope("filter-result", requestId, result);
 }
 
 function handleFilterClear(requestId: string): Envelope<"filter-result", FilterResultPayload> {
   const result = bridge.clearFilter();
-  return createEnvelope("filter-result", requestId, result);
+  return createTypedEnvelope("filter-result", requestId, result);
 }
 
 browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
@@ -76,7 +78,7 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
   }
 
   if (message.kind === "filter-apply") {
-    const query = String((message.payload as { query?: string } | undefined)?.query ?? "");
+    const query = (message.payload as FilterApplyPayload | undefined)?.query ?? "";
     sendResponse(handleFilterApply(message.requestId, query));
     return false;
   }
@@ -87,13 +89,13 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
   }
 
   if (message.kind === "mirror-set" || message.kind === "mirror-clear") {
-    const itemId = String((message.payload as { itemId?: string } | undefined)?.itemId ?? "");
+    const itemId = (message.payload as MirrorItemPayload | undefined)?.itemId ?? "";
     void (async () => {
       const res =
         message.kind === "mirror-set"
           ? await tagBridge.setJunkTag(itemId)
           : await tagBridge.clearJunkTag(itemId);
-      sendResponse(createEnvelope("mirror-result", message.requestId, res));
+      sendResponse(createTypedEnvelope("mirror-result", message.requestId, res));
     })();
     return true;
   }
@@ -103,24 +105,7 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
   return false;
 });
 
-try {
-  const channel = new BroadcastChannel("dim");
-  channel.addEventListener("message", (event: MessageEvent) => {
-    const data = event.data as { type?: string } | undefined;
-    if (data?.type === "stores-updated" || data?.type === "item-moved") {
-      const payload: LightStatusPayload = {
-        present: true,
-        href: location.href,
-        inventoryHint: data.type,
-      };
-      void browser.runtime
-        .sendMessage(createEnvelope("light-status", newRequestId(), payload))
-        .catch(() => undefined);
-    }
-  });
-} catch {
-  // optional
-}
+// Inventory freshness: Workbench reloads on focus/user action only (no BroadcastChannel half-seam).
 
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {

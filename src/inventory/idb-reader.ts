@@ -67,19 +67,17 @@ export async function readVaultInventory(options: ReadVaultOptions): Promise<Inv
     }
 
     const shouldEnrich = options.enrich !== false;
-    let definitions = options.definitions;
-    if (definitions === undefined && shouldEnrich) {
-      definitions = await loadDefinitionsFromIdb(options.idb);
-    }
-
-    const extractOpts = definitions !== undefined && definitions.size > 0 ? { definitions } : {};
-    let items: VaultItem[] = extractVaultItems(profile, extractOpts);
+    let items: VaultItem[] = extractVaultItems(profile);
 
     if (shouldEnrich) {
+      let definitions = options.definitions;
+      if (definitions === undefined) {
+        definitions = await loadDefinitionsFromIdb(options.idb);
+      }
       const dimApi = await options.idb.get(DIM_API_PROFILE_KEY);
       const tags = extractTagsFromDimApiProfile(dimApi, membershipId);
       items = enrichVaultItems(items, {
-        ...(definitions !== undefined ? { definitions } : {}),
+        ...(definitions !== undefined && definitions.size > 0 ? { definitions } : {}),
         tags,
       });
     }

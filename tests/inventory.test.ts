@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   extractVaultItems,
+  enrichVaultItems,
   membershipProfileKey,
   readVaultInventory,
   resolveMembershipId,
@@ -52,7 +53,7 @@ describe("extractVaultItems from fixture profile", () => {
     expect(a?.power).toBe(1810);
   });
 
-  it("uses definition map for name/tier when provided", () => {
+  it("enrich applies definition map for name/tier (extract does not)", () => {
     const defs: DefinitionMap = new Map([
       [
         1001,
@@ -64,7 +65,10 @@ describe("extractVaultItems from fixture profile", () => {
         },
       ],
     ]);
-    const items = extractVaultItems(warmProfile, { definitions: defs });
+    const raw = extractVaultItems(warmProfile);
+    const rawTrust = raw.find((i) => i.itemHash === 1001);
+    expect(rawTrust?.name).toBe("#1001");
+    const items = enrichVaultItems(raw, { definitions: defs });
     const trust = items.find((i) => i.itemHash === 1001);
     expect(trust?.name).toBe("Trust");
     expect(trust?.tierType).toBe("Legendary");

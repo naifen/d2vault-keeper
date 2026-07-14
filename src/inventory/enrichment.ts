@@ -1,14 +1,19 @@
 /**
  * Enrich vault items with Destiny definitions + DIM tags so Stage exclusions work.
  * Pure helpers — I/O stays in idb-reader.
+ * Tag extract lives in dim-api-profile (shared with Mirror write).
  */
 
 import type { DefinitionMap, ItemDefinitionLite, VaultItem } from "./types.js";
+import { TIER_TYPE_EXOTIC } from "./types.js";
+import {
+  DIM_API_PROFILE_KEY,
+  extractTagsFromDimApiProfile,
+  type TagByItemId,
+} from "../dim-api-profile/index.js";
 
-/** Destiny inventory tierType for Exotic. */
-export const TIER_TYPE_EXOTIC = 6;
-
-export const DIM_API_PROFILE_KEY = "dim-api-profile";
+export { DIM_API_PROFILE_KEY, extractTagsFromDimApiProfile, type TagByItemId };
+export { TIER_TYPE_EXOTIC };
 
 /** Common DIM idb-keyval keys for language tables (research: d2-manifest-*). */
 export const MANIFEST_KEY_CANDIDATES = [
@@ -16,47 +21,6 @@ export const MANIFEST_KEY_CANDIDATES = [
   "d2-manifest",
   "manifest-en",
 ] as const;
-
-export type TagByItemId = ReadonlyMap<string, string>;
-
-/**
- * Parse DIM Sync / local dim-api-profile blob for per-instance tags.
- * Shape: profiles[accountKey].tags[itemId].tag
- */
-export function extractTagsFromDimApiProfile(
-  raw: unknown,
-  membershipId?: string,
-): TagByItemId {
-  const map = new Map<string, string>();
-  if (typeof raw !== "object" || raw === null) return map;
-  const root = raw as Record<string, unknown>;
-  const profiles = root.profiles;
-  if (typeof profiles !== "object" || profiles === null) return map;
-
-  const profileEntries = Object.entries(profiles as Record<string, unknown>);
-  for (const [accountKey, profile] of profileEntries) {
-    // Match exact DIM account key prefix: `${membershipId}-d${version}` (not bare startsWith —
-    // avoids "42" matching "421-d2").
-    if (
-      membershipId &&
-      accountKey !== membershipId &&
-      !accountKey.startsWith(`${membershipId}-d`)
-    ) {
-      continue;
-    }
-    if (typeof profile !== "object" || profile === null) continue;
-    const tags = (profile as Record<string, unknown>).tags;
-    if (typeof tags !== "object" || tags === null) continue;
-    for (const [itemId, ann] of Object.entries(tags as Record<string, unknown>)) {
-      if (typeof ann !== "object" || ann === null) continue;
-      const tag = (ann as Record<string, unknown>).tag;
-      if (typeof tag === "string" && tag.trim()) {
-        map.set(itemId, tag.toLowerCase());
-      }
-    }
-  }
-  return map;
-}
 
 /**
  * Build DefinitionMap from DIM manifest JSON tables (InventoryItem).

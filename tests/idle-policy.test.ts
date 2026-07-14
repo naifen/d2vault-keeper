@@ -16,7 +16,7 @@ describe("idle / no background pollers", () => {
     for (const rel of [
       "src/background/trash-handlers.ts",
       "src/background/agent-handlers.ts",
-      "src/background/relay.ts",
+      "src/messaging/protocol.ts",
     ]) {
       const src = readFileSync(join(root, rel), "utf8");
       expect(sourceHasIdlePollers(src), rel).toBe(false);

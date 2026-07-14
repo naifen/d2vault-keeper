@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createEnvelope } from "../src/messaging/index.js";
-import { selectLightResponse } from "../src/background/relay.js";
+import { createEnvelope, selectLightResponse } from "../src/messaging/index.js";
 
 describe("selectLightResponse (shipped relay policy)", () => {
   it("prefers applied:true over earlier applied:false for filter-apply", () => {
