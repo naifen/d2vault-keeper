@@ -27,7 +27,7 @@ import {
   type AgentResult,
 } from "../agent/index.js";
 import type { AgentSettingsResultPayload } from "../messaging/types.js";
-import { selectedStageCandidates } from "./stage-map.js";
+import { selectedStageCandidates } from "../inventory/project.js";
 
 export type RuntimeSend = (message: Envelope) => Promise<unknown>;
 

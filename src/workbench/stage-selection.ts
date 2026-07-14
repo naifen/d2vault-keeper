@@ -8,7 +8,7 @@ import type { AgentRecommendation } from "../agent/types.js";
 import type { VaultItem } from "../inventory/types.js";
 import type { StageCandidate, TrashRecord } from "../trash/types.js";
 import { buildSelectionFilter } from "./selection-filter.js";
-import { selectedStageCandidates } from "./stage-map.js";
+import { selectedStageCandidates } from "../inventory/project.js";
 
 export interface StageSelectionInput {
   vaultItems: readonly VaultItem[];
