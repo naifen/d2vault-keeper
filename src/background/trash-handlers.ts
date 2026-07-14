@@ -66,13 +66,20 @@ export async function handleTrashUnstage(
   ids: string[],
 ): Promise<Envelope> {
   const { state, removed, mirror } = await useCase.unstage(ids);
-  return createEnvelope("trash-result", requestId, {
+  const payload: {
+    ok: true;
+    action: "unstage";
+    state: typeof state;
+    removed: typeof removed;
+    mirror?: typeof mirror;
+  } = {
     ok: true,
     action: "unstage",
     state,
     removed,
-    mirror,
-  });
+  };
+  if (mirror !== undefined) payload.mirror = mirror;
+  return createEnvelope("trash-result", requestId, payload);
 }
 
 export async function handleRepairMirror(requestId: string): Promise<Envelope> {

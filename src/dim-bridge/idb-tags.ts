@@ -64,7 +64,7 @@ export function createIdbMirrorBridge(options: IdbMirrorBridgeOptions): MirrorBr
 
 /**
  * Page production adapter: resolve membership from localStorage each call,
- * then write junk via dim-api-profile + IDB.
+ * then write junk via dim-api-profile + IDB (same write path as createIdbMirrorBridge).
  */
 export function createBrowserIdbMirrorBridge(
   idb: IdbKeyval,
@@ -74,12 +74,12 @@ export function createBrowserIdbMirrorBridge(
     async setJunkTag(itemId: string) {
       const membershipId = getMembershipId();
       if (!membershipId) return { ok: false, error: "membership unavailable" };
-      return createIdbMirrorBridge({ idb, membershipId }).setJunkTag(itemId);
+      return writeJunkTag({ idb, membershipId }, itemId, JUNK_TAG);
     },
     async clearJunkTag(itemId: string) {
       const membershipId = getMembershipId();
       if (!membershipId) return { ok: false, error: "membership unavailable" };
-      return createIdbMirrorBridge({ idb, membershipId }).clearJunkTag(itemId);
+      return writeJunkTag({ idb, membershipId }, itemId, null);
     },
   };
 }

@@ -10,6 +10,10 @@ export interface AgentRecommendation {
   itemHash: number;
   name: string;
   reason?: string;
+  /** Optional exclusion fields when model or vault enrichment supplies them. */
+  tierType?: string;
+  tag?: string;
+  isExotic?: boolean;
 }
 
 export interface AgentResult {

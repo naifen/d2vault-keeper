@@ -42,6 +42,22 @@ describe("parseAgentResponse", () => {
     );
     expect(r.recommendations[0]?.itemHash).toBe(12345);
   });
+
+  it("preserves exclusion fields on recommendations for post-filter", () => {
+    const r = parseAgentResponse(
+      JSON.stringify({
+        filters: [],
+        explanation: "x",
+        recommendations: [
+          { id: "1", itemHash: 1, name: "Hawk", isExotic: true, tierType: "Exotic" },
+          { id: "2", itemHash: 2, name: "Fav", tag: "favorite" },
+        ],
+      }),
+    );
+    expect(r.recommendations[0]?.isExotic).toBe(true);
+    expect(r.recommendations[0]?.tierType).toBe("Exotic");
+    expect(r.recommendations[1]?.tag).toBe("favorite");
+  });
 });
 
 describe("vault opt-in gate", () => {
@@ -185,6 +201,38 @@ describe("runAgent mocked HTTP", () => {
     });
     expect(result.recommendations.map((r) => r.id)).toEqual(["leg"]);
     expect(result.filters).toEqual(["is:weapon"]);
+  });
+
+  it("post-parse drops recs that carry isExotic/tag on the payload without vault", async () => {
+    const fetchFn = vi.fn(async () => {
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  filters: [],
+                  explanation: "x",
+                  recommendations: [
+                    { id: "a", itemHash: 1, name: "Leg", tierType: "Legendary" },
+                    { id: "b", itemHash: 2, name: "Ex", isExotic: true },
+                    { id: "c", itemHash: 3, name: "Fav", tag: "favorite" },
+                  ],
+                }),
+              },
+            },
+          ],
+        }),
+      } as Response;
+    });
+
+    const result = await runAgent({
+      settings,
+      request: { intention: "junk", vaultContextOptIn: false },
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.recommendations.map((r) => r.id)).toEqual(["a"]);
   });
 });
 
