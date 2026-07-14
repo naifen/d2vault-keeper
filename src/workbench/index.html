@@ -7,86 +7,142 @@
     <link rel="stylesheet" href="workbench.css" />
   </head>
   <body>
-    <header class="wb-header">
-      <h1>Vault Keeper</h1>
-      <p class="wb-sub">Companion for DIM — stages gear for in-game dismantle; never deletes Destiny items.</p>
-    </header>
+    <div class="wb-root">
+      <header class="wb-header">
+        <div class="wb-header-text">
+          <h1>Vault Keeper</h1>
+          <p class="wb-sub">Stage for in-game dismantle — never deletes Destiny items.</p>
+        </div>
+        <button type="button" class="wb-icon-btn" id="btn-settings" aria-label="Settings" title="Settings">
+          <span aria-hidden="true">⚙</span>
+        </button>
+      </header>
 
-    <section class="wb-section" id="section-connection" aria-label="Connection">
-      <h2>Connection</h2>
-      <p id="conn-status" class="wb-status">Checking…</p>
-      <button type="button" id="btn-roundtrip">Test message round-trip</button>
-      <pre id="roundtrip-log" class="wb-log" hidden></pre>
-    </section>
+      <div class="wb-scroll">
+        <!-- Composer-first: Intention + Suggest -->
+        <section class="wb-section" id="section-intention" aria-label="Intention">
+          <label class="wb-label" for="intention-input">Intention</label>
+          <textarea
+            id="intention-input"
+            class="wb-input wb-textarea"
+            rows="3"
+            placeholder="e.g. junk legendary hand cannons without rampage"
+            aria-describedby="intention-hint"
+          ></textarea>
+          <p id="intention-hint" class="wb-hint">Enter Suggests · Shift+Enter for newline</p>
+          <div class="wb-row wb-actions">
+            <button type="button" id="btn-suggest" class="wb-btn wb-btn-primary" disabled title="Save an API key in Settings">
+              Suggest
+            </button>
+            <button type="button" id="btn-cancel-agent" class="wb-btn" hidden>Cancel</button>
+            <button type="button" id="btn-open-settings-cta" class="wb-btn wb-linkish" hidden>
+              Open Settings for API key
+            </button>
+          </div>
+          <p id="agent-status" class="wb-status" role="status">Agent idle</p>
+        </section>
 
-    <section class="wb-section" id="section-intention" aria-label="Intention">
-      <h2>Intention</h2>
-      <label class="wb-label" for="api-key">OpenRouter-compatible API key</label>
-      <div class="wb-row">
-        <input id="api-key" class="wb-input" type="password" autocomplete="off" placeholder="sk-or-…" />
-        <button type="button" id="btn-save-key">Save key</button>
-      </div>
-      <label class="wb-label" for="intention-input">Intention</label>
-      <textarea id="intention-input" class="wb-input wb-textarea" rows="3" placeholder="e.g. junk legendary hand cannons without rampage"></textarea>
-      <label class="wb-check">
-        <input type="checkbox" id="vault-opt-in" />
-        Opt in: send vault slice to agent for this run (required for vault-aware recs)
-      </label>
-      <div class="wb-row wb-actions">
-        <button type="button" id="btn-run-agent">Run agent</button>
-        <button type="button" id="btn-cancel-agent">Cancel</button>
-      </div>
-      <p id="agent-status" class="wb-status">Agent idle</p>
-      <label class="wb-label" for="agent-explanation">Explanation</label>
-      <p id="agent-explanation" class="wb-muted">—</p>
-      <label class="wb-label" for="agent-recs">Recommendations (Stage explicitly — never auto)</label>
-      <ul id="agent-recs" class="trash-list"></ul>
-    </section>
+        <!-- DIM filter card -->
+        <section class="wb-section" id="section-filter" aria-label="DIM filter">
+          <div class="wb-section-head">
+            <h2>DIM filter</h2>
+            <button type="button" id="btn-refresh-vault" class="wb-btn wb-btn-ghost" title="Reload vault from DIM cache">
+              Refresh vault
+            </button>
+          </div>
+          <label class="wb-label" for="filter-input">Filter string</label>
+          <textarea
+            id="filter-input"
+            class="wb-input wb-query"
+            rows="2"
+            spellcheck="false"
+            placeholder='e.g. is:handcannon -is:exotic'
+            aria-label="DIM filter string"
+          ></textarea>
+          <div class="wb-row wb-actions">
+            <button type="button" id="btn-copy-filter" class="wb-btn">Copy</button>
+            <button type="button" id="btn-apply-filter" class="wb-btn wb-btn-accent">Apply</button>
+            <button type="button" id="btn-clear-filter" class="wb-btn">Clear</button>
+          </div>
+          <p id="filter-status" class="wb-status" role="status">Filter idle</p>
+          <p id="vault-status" class="wb-status" role="status">Vault: not loaded</p>
+        </section>
 
-    <section class="wb-section" id="section-filter" aria-label="Filter and results">
-      <h2>Filter / results</h2>
-      <label class="wb-label" for="filter-input">DIM filter</label>
-      <div class="wb-row">
-        <input
-          id="filter-input"
-          class="wb-input"
-          type="text"
-          spellcheck="false"
-          placeholder='e.g. is:handcannon -is:exotic'
-          aria-label="DIM filter string"
-        />
+        <!-- Results: Matches | Recs -->
+        <section class="wb-section" id="section-results" aria-label="Results" data-collapsed="true">
+          <div class="wb-section-head">
+            <h2>Results</h2>
+            <div class="wb-chip-row" role="tablist" aria-label="Results views">
+              <button type="button" class="wb-chip" id="tab-matches" role="tab" aria-selected="true">Matches</button>
+              <button type="button" class="wb-chip" id="tab-recs" role="tab" aria-selected="false">Recs</button>
+            </div>
+          </div>
+          <div
+            id="results-list"
+            class="vault-list"
+            role="list"
+            aria-label="Results items"
+            tabindex="0"
+          ></div>
+          <div class="wb-row wb-actions">
+            <button type="button" id="btn-stage" class="wb-btn wb-btn-accent" title="Stage selected vault items (no confirmation)">
+              Stage selected
+            </button>
+          </div>
+          <p id="results-status" class="wb-status" role="status"></p>
+          <p id="agent-explanation" class="wb-explain" aria-live="polite">—</p>
+        </section>
       </div>
-      <div class="wb-row wb-actions">
-        <button type="button" id="btn-apply-filter">Apply</button>
-        <button type="button" id="btn-clear-filter">Clear</button>
-        <button type="button" id="btn-refresh-vault">Refresh vault</button>
-      </div>
-      <p id="filter-status" class="wb-status">Filter idle</p>
-      <p id="vault-status" class="wb-status">Vault: not loaded</p>
-      <div
-        id="vault-list"
-        class="vault-list"
-        role="list"
-        aria-label="Vault items"
-        tabindex="0"
-      ></div>
-      <p class="wb-muted" id="vault-hint">Vault-only items from DIM profile cache (no Bungie HTTP). Apply writes into DIM search via dim-bridge.</p>
-    </section>
 
-    <section class="wb-section" id="section-trash" aria-label="Trash">
-      <h2>Trash</h2>
-      <p class="wb-muted" id="trash-help">
-        Staged for in-game dismantle. Vault Keeper never deletes items from Destiny.
-      </p>
-      <div class="wb-row wb-actions">
-        <button type="button" id="btn-stage" title="Stage selected vault items (no confirmation)">Stage selected</button>
-        <button type="button" id="btn-unstage">Unstage selected</button>
-        <button type="button" id="btn-repair-mirror" title="Re-apply junk Mirror for desynced rows">Repair Mirror</button>
-        <button type="button" id="btn-refresh-trash">Refresh Trash</button>
+      <!-- Trash peek / expand -->
+      <section class="wb-trash-peek" id="section-trash" aria-label="Trash">
+        <button type="button" class="wb-peek-bar" id="btn-trash-toggle" aria-expanded="false" aria-controls="trash-body">
+          <strong id="trash-peek-label">Trash · 0</strong>
+          <span class="wb-muted" id="trash-peek-hint">Expand</span>
+        </button>
+        <div class="wb-peek-body" id="trash-body" hidden>
+          <p class="wb-muted" id="trash-help">
+            Staged for in-game dismantle. Vault Keeper never deletes items from Destiny.
+          </p>
+          <div class="wb-row wb-actions">
+            <button type="button" id="btn-unstage" class="wb-btn">Unstage selected</button>
+            <button type="button" id="btn-repair-mirror" class="wb-btn" title="Re-apply junk Mirror for desynced rows">
+              Repair Mirror
+            </button>
+            <button type="button" id="btn-refresh-trash" class="wb-btn wb-btn-ghost">Refresh</button>
+          </div>
+          <p id="trash-status" class="wb-status" role="status">Trash: —</p>
+          <ul id="trash-list" class="trash-list" aria-label="Staged items"></ul>
+        </div>
+      </section>
+    </div>
+
+    <!-- Settings sheet (API key, vault opt-in, advanced/debug) -->
+    <div class="wb-scrim" id="settings-scrim" hidden>
+      <div class="wb-sheet" role="dialog" aria-modal="true" aria-labelledby="settings-title" id="settings-sheet">
+        <div class="wb-sheet-head">
+          <h2 id="settings-title">Settings</h2>
+          <button type="button" class="wb-icon-btn" id="btn-settings-close" aria-label="Close Settings">✕</button>
+        </div>
+        <label class="wb-label" for="api-key">OpenRouter-compatible API key</label>
+        <div class="wb-row">
+          <input id="api-key" class="wb-input" type="password" autocomplete="off" placeholder="sk-or-…" />
+        </div>
+        <div class="wb-row wb-actions">
+          <button type="button" id="btn-save-key" class="wb-btn wb-btn-accent">Save key</button>
+        </div>
+        <label class="wb-check">
+          <input type="checkbox" id="vault-opt-in" />
+          Opt in: send vault slice to agent for this run (required for vault-aware recs)
+        </label>
+        <details class="wb-advanced" id="section-advanced">
+          <summary>Advanced / debug</summary>
+          <p id="conn-status" class="wb-status">Connection: checking…</p>
+          <button type="button" id="btn-roundtrip" class="wb-btn">Test message round-trip</button>
+          <pre id="roundtrip-log" class="wb-log" hidden></pre>
+        </details>
       </div>
-      <p id="trash-status" class="wb-status">Trash: —</p>
-      <ul id="trash-list" class="trash-list" aria-label="Staged items"></ul>
-    </section>
+    </div>
 
     <script type="module" src="workbench.js"></script>
   </body>

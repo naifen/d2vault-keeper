@@ -3,6 +3,7 @@ export type {
   InventoryStatus,
   DestinyProfileResponseLike,
   DestinyItemComponentLike,
+  DestinySocketEntryLike,
   ItemDefinitionLite,
   DefinitionMap,
 } from "./types.js";
@@ -33,6 +34,10 @@ export {
   definitionsFromManifestTables,
   applyDefinitions,
   applyTags,
+  applyPerks,
+  plugHashesFromProfile,
+  perkNamesFromPlugHashes,
   DIM_API_PROFILE_KEY,
   type TagByItemId,
+  type PlugHashesByItemId,
 } from "./enrichment.js";

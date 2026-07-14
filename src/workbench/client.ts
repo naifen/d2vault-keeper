@@ -25,6 +25,7 @@ import {
   type AgentRecommendation,
   type AgentResult,
 } from "../agent/index.js";
+import type { AgentSettingsResultPayload } from "../messaging/types.js";
 import { selectedStageCandidates } from "./stage-map.js";
 
 export type RuntimeSend = (message: Envelope) => Promise<unknown>;
@@ -54,6 +55,8 @@ export interface WorkbenchClient {
   clearFilter(): Promise<ClientResult<{ applied: boolean }>>;
   repairMirror(): Promise<ClientResult<{ items: TrashRecord[]; repaired: TrashRecord[] }>>;
   saveApiKey(apiKey: string): Promise<ClientResult<{ saved: boolean }>>;
+  /** Load agent settings (api key masked; hasKey for Suggest gating). */
+  loadSettings(): Promise<ClientResult<{ hasKey: boolean }>>;
   runAgent(input: {
     intention: string;
     vaultContextOptIn: boolean;
@@ -249,9 +252,28 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
           createTypedEnvelope("agent-settings-set", newRequestId(), { apiKey: trimmed }),
         );
         if (isEnvelope(res) && res.kind === "agent-settings-result") {
-          return { ok: true, saved: true };
+          const payload = res.payload as AgentSettingsResultPayload | undefined;
+          if (payload?.ok) return { ok: true, saved: true };
         }
         return bad("Failed to save API key");
+      } catch (err) {
+        return bad(String(err));
+      }
+    },
+
+    async loadSettings() {
+      try {
+        const res = await send(createTypedEnvelope("agent-settings-get", newRequestId()));
+        if (!isEnvelope(res) || res.kind !== "agent-settings-result") {
+          return bad("Failed to load settings");
+        }
+        const payload = res.payload as AgentSettingsResultPayload | undefined;
+        if (!payload?.ok) return bad("Failed to load settings");
+        const hasKey = Boolean(
+          payload.settings.hasKey ||
+            (payload.settings.apiKey && payload.settings.apiKey !== ""),
+        );
+        return { ok: true, hasKey };
       } catch (err) {
         return bad(String(err));
       }

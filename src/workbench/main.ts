@@ -1,5 +1,5 @@
 /**
- * Workbench side panel UI.
+ * Workbench side panel UI — composer-first (variant C).
  * Opened only via toolbar / browser side surface — never from Light chip.
  * Domain actions go through createWorkbenchClient — this file is the DOM adapter.
  */
@@ -12,6 +12,15 @@ import { newRequestId } from "../messaging/index.js";
 import { ensureBrowser } from "../shared/webext.js";
 import { visibleWindow } from "./virtual-list.js";
 import { createWorkbenchClient } from "./client.js";
+import { formatPerkHoverLine } from "./perk-display.js";
+import {
+  filterTextFromAgentResult,
+  recRowsFromAgent,
+  resultsTabAfterSuggest,
+  selectionFilterAfterStage,
+  type ResultsTab,
+} from "./shell-state.js";
+import { matchVaultItems } from "./match-filter.js";
 
 ensureBrowser();
 
@@ -19,16 +28,23 @@ const ROW_HEIGHT = 28;
 
 const statusEl = document.getElementById("conn-status");
 const logEl = document.getElementById("roundtrip-log");
-const btn = document.getElementById("btn-roundtrip");
+const btnRoundtrip = document.getElementById("btn-roundtrip");
 const vaultStatusEl = document.getElementById("vault-status");
-const vaultListEl = document.getElementById("vault-list");
-const btnRefresh = document.getElementById("btn-refresh-vault");
-const filterInput = document.getElementById("filter-input") as HTMLInputElement | null;
+const resultsListEl = document.getElementById("results-list");
+const resultsSectionEl = document.getElementById("section-results");
+const btnRefreshVault = document.getElementById("btn-refresh-vault");
+const filterInput = document.getElementById("filter-input") as HTMLTextAreaElement | null;
 const filterStatusEl = document.getElementById("filter-status");
+const resultsStatusEl = document.getElementById("results-status");
 const btnApply = document.getElementById("btn-apply-filter");
 const btnClearFilter = document.getElementById("btn-clear-filter");
+const btnCopyFilter = document.getElementById("btn-copy-filter");
 const trashListEl = document.getElementById("trash-list");
 const trashStatusEl = document.getElementById("trash-status");
+const trashBodyEl = document.getElementById("trash-body");
+const trashPeekLabel = document.getElementById("trash-peek-label");
+const trashPeekHint = document.getElementById("trash-peek-hint");
+const btnTrashToggle = document.getElementById("btn-trash-toggle");
 const btnStage = document.getElementById("btn-stage");
 const btnUnstage = document.getElementById("btn-unstage");
 const btnRefreshTrash = document.getElementById("btn-refresh-trash");
@@ -38,14 +54,27 @@ const apiKeyInput = document.getElementById("api-key") as HTMLInputElement | nul
 const btnSaveKey = document.getElementById("btn-save-key");
 const intentionInput = document.getElementById("intention-input") as HTMLTextAreaElement | null;
 const vaultOptIn = document.getElementById("vault-opt-in") as HTMLInputElement | null;
-const btnRunAgent = document.getElementById("btn-run-agent");
-const btnCancelAgent = document.getElementById("btn-cancel-agent");
+const btnSuggest = document.getElementById("btn-suggest") as HTMLButtonElement | null;
+const btnCancelAgent = document.getElementById("btn-cancel-agent") as HTMLButtonElement | null;
+const btnOpenSettingsCta = document.getElementById("btn-open-settings-cta");
+const btnSettings = document.getElementById("btn-settings");
+const btnSettingsClose = document.getElementById("btn-settings-close");
+const settingsScrim = document.getElementById("settings-scrim");
 const agentStatusEl = document.getElementById("agent-status");
 const agentExplanationEl = document.getElementById("agent-explanation");
-const agentRecsEl = document.getElementById("agent-recs");
+const tabMatches = document.getElementById("tab-matches");
+const tabRecs = document.getElementById("tab-recs");
 
 let vaultItems: VaultItem[] = [];
 let trashItems: TrashRecord[] = [];
+let agentRecs: AgentRecommendation[] = [];
+let resultsTab: ResultsTab = "matches";
+let resultsExpanded = false;
+let trashExpanded = false;
+let hasApiKey = false;
+let agentRunning = false;
+/** Monotonic token so only the latest Suggest run clears the running UI flag. */
+let suggestGeneration = 0;
 const selectedVaultIds = new Set<string>();
 const selectedTrashIds = new Set<string>();
 
@@ -61,7 +90,7 @@ function setElStatus(el: Element | null, text: string, state: StatusState = "idl
 }
 
 function setStatus(text: string, state: StatusState = "idle"): void {
-  setElStatus(statusEl, text, state);
+  setElStatus(statusEl, text.startsWith("Connection") ? text : `Connection: ${text}`, state);
 }
 
 function setVaultStatus(text: string, state: StatusState = "idle"): void {
@@ -72,6 +101,10 @@ function setFilterStatus(text: string, state: StatusState = "idle"): void {
   setElStatus(filterStatusEl, text, state);
 }
 
+function setResultsStatus(text: string, state: StatusState = "idle"): void {
+  setElStatus(resultsStatusEl, text, state);
+}
+
 function setTrashStatus(text: string, state: StatusState = "idle"): void {
   setElStatus(trashStatusEl, text, state);
 }
@@ -80,17 +113,101 @@ function setAgentStatus(text: string, state: StatusState = "idle"): void {
   setElStatus(agentStatusEl, text, state);
 }
 
-function renderVaultList(): void {
-  if (!vaultListEl) return;
-  const savedScrollTop = vaultListEl.scrollTop;
+function updateSuggestGating(): void {
+  if (!btnSuggest) return;
+  const canSuggest = hasApiKey && !agentRunning;
+  btnSuggest.disabled = !canSuggest;
+  btnSuggest.title = hasApiKey
+    ? "Run Agent from Intention"
+    : "Save an API key in Settings";
+  if (btnOpenSettingsCta) {
+    btnOpenSettingsCta.hidden = hasApiKey;
+  }
+  if (btnCancelAgent) {
+    btnCancelAgent.hidden = !agentRunning;
+  }
+}
 
+function openSettings(): void {
+  if (settingsScrim) settingsScrim.hidden = false;
+  // Prefer focusing first field; keep gear as restore target via data attr.
+  if (btnSettings) btnSettings.setAttribute("data-settings-opener", "1");
+  apiKeyInput?.focus();
+}
+
+function closeSettings(): void {
+  if (settingsScrim) settingsScrim.hidden = true;
+  // Restore focus to Settings gear for keyboard users.
+  btnSettings?.focus();
+}
+
+function setResultsExpanded(open: boolean): void {
+  resultsExpanded = open;
+  if (resultsSectionEl) {
+    resultsSectionEl.setAttribute("data-collapsed", open ? "false" : "true");
+  }
+}
+
+function setResultsTab(tab: ResultsTab): void {
+  resultsTab = tab;
+  tabMatches?.setAttribute("aria-selected", tab === "matches" ? "true" : "false");
+  tabRecs?.setAttribute("aria-selected", tab === "recs" ? "true" : "false");
+  renderResultsList();
+}
+
+function currentResultRows(): Array<VaultItem & { reason?: string }> {
+  if (resultsTab === "recs") {
+    return recRowsFromAgent(agentRecs, vaultItems);
+  }
+  // Matches: vault hits for the current DIM filter card (best-effort local eval).
+  return matchVaultItems(vaultItems, filterInput?.value ?? "");
+}
+
+function rowTitle(item: VaultItem & { reason?: string }): string {
+  const perkLine = formatPerkHoverLine(item.perks);
+  const bits = [item.name, perkLine];
+  if (item.reason) bits.push(item.reason);
+  bits.push(item.id);
+  return bits.join(" — ");
+}
+
+function matchesEmptyMessage(): string {
+  if (!resultsExpanded) {
+    return "Results collapsed — Suggest or refresh vault to expand.";
+  }
   if (vaultItems.length === 0) {
-    vaultListEl.replaceChildren();
+    return "No vault items loaded. Refresh vault or open DIM logged in.";
+  }
+  const q = (filterInput?.value ?? "").trim();
+  if (q) {
+    return "No Matches for this filter in the vault cache (best-effort local eval).";
+  }
+  return "No vault matches. Refresh vault or Suggest.";
+}
+
+function renderResultsList(): void {
+  if (!resultsListEl) return;
+  const savedScrollTop = resultsListEl.scrollTop;
+  const focusedId =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement.closest(".vault-row")?.getAttribute("data-id") ?? null
+      : null;
+  const rows = currentResultRows();
+
+  if (rows.length === 0) {
+    resultsListEl.replaceChildren();
+    const empty = document.createElement("div");
+    empty.className = "vault-list-empty";
+    empty.textContent =
+      resultsTab === "recs"
+        ? "No recommendations (Stage is always manual)."
+        : matchesEmptyMessage();
+    resultsListEl.appendChild(empty);
     return;
   }
 
-  const viewportHeight = vaultListEl.clientHeight || 280;
-  const win = visibleWindow(savedScrollTop, viewportHeight, vaultItems.length, ROW_HEIGHT);
+  const viewportHeight = resultsListEl.clientHeight || 220;
+  const win = visibleWindow(savedScrollTop, viewportHeight, rows.length, ROW_HEIGHT);
 
   const spacer = document.createElement("div");
   spacer.className = "vault-list-spacer";
@@ -100,17 +217,25 @@ function renderVaultList(): void {
   windowEl.className = "vault-list-window";
   windowEl.style.top = `${win.offsetY}px`;
 
+  let restoreFocusEl: HTMLElement | null = null;
+
   for (let i = win.startIndex; i < win.endIndex; i++) {
-    const item = vaultItems[i]!;
+    const item = rows[i]!;
     const row = document.createElement("div");
     row.className = "vault-row";
     row.setAttribute("role", "listitem");
     row.dataset.id = item.id;
+    row.tabIndex = 0;
+    const title = rowTitle(item);
+    row.title = title;
+    row.setAttribute("aria-label", title);
+    row.setAttribute("aria-description", formatPerkHoverLine(item.perks));
 
     const check = document.createElement("input");
     check.type = "checkbox";
     check.className = "vault-row-check";
     check.checked = selectedVaultIds.has(item.id);
+    check.setAttribute("aria-label", `Select ${item.name}`);
     check.addEventListener("change", () => {
       if (check.checked) selectedVaultIds.add(item.id);
       else selectedVaultIds.delete(item.id);
@@ -119,7 +244,6 @@ function renderVaultList(): void {
     const name = document.createElement("span");
     name.className = "vault-row-name";
     name.textContent = item.name;
-    name.title = `${item.name} (${item.id})`;
 
     const meta = document.createElement("span");
     meta.className = "vault-row-meta";
@@ -128,16 +252,31 @@ function renderVaultList(): void {
       item.itemType,
       item.power !== undefined ? `⚡${item.power}` : undefined,
       item.quantity > 1 ? `×${item.quantity}` : undefined,
+      item.reason,
     ].filter(Boolean);
     meta.textContent = bits.join(" · ") || `#${item.itemHash}`;
 
-    row.append(check, name, meta);
+    const perkTip = document.createElement("span");
+    perkTip.className = "vault-row-perks";
+    perkTip.textContent = formatPerkHoverLine(item.perks);
+    perkTip.setAttribute("aria-hidden", "true");
+
+    row.append(check, name, meta, perkTip);
+    if (focusedId && item.id === focusedId) restoreFocusEl = row;
     windowEl.appendChild(row);
   }
 
   spacer.appendChild(windowEl);
-  vaultListEl.replaceChildren(spacer);
-  vaultListEl.scrollTop = savedScrollTop;
+  resultsListEl.replaceChildren(spacer);
+  resultsListEl.scrollTop = savedScrollTop;
+  restoreFocusEl?.focus({ preventScroll: true });
+}
+
+function updateTrashPeek(): void {
+  if (trashPeekLabel) trashPeekLabel.textContent = `Trash · ${trashItems.length}`;
+  if (trashPeekHint) trashPeekHint.textContent = trashExpanded ? "Collapse" : "Expand";
+  if (btnTrashToggle) btnTrashToggle.setAttribute("aria-expanded", trashExpanded ? "true" : "false");
+  if (trashBodyEl) trashBodyEl.hidden = !trashExpanded;
 }
 
 function renderTrashList(): void {
@@ -148,6 +287,7 @@ function renderTrashList(): void {
     li.textContent = TRASH_SAFE_COPY.empty;
     li.className = "wb-muted";
     trashListEl.appendChild(li);
+    updateTrashPeek();
     return;
   }
   for (const item of trashItems) {
@@ -155,6 +295,7 @@ function renderTrashList(): void {
     const check = document.createElement("input");
     check.type = "checkbox";
     check.checked = selectedTrashIds.has(item.id);
+    check.setAttribute("aria-label", `Select staged ${item.name}`);
     check.addEventListener("change", () => {
       if (check.checked) selectedTrashIds.add(item.id);
       else selectedTrashIds.delete(item.id);
@@ -168,23 +309,7 @@ function renderTrashList(): void {
     li.append(check, label, mirror);
     trashListEl.appendChild(li);
   }
-}
-
-function renderRecs(recs: AgentRecommendation[]): void {
-  if (!agentRecsEl) return;
-  agentRecsEl.replaceChildren();
-  if (recs.length === 0) {
-    const li = document.createElement("li");
-    li.className = "wb-muted";
-    li.textContent = "No recommendations (Stage is always manual).";
-    agentRecsEl.appendChild(li);
-    return;
-  }
-  for (const r of recs) {
-    const li = document.createElement("li");
-    li.textContent = `${r.name}${r.reason ? ` — ${r.reason}` : ""} (Stage manually)`;
-    agentRecsEl.appendChild(li);
-  }
+  updateTrashPeek();
 }
 
 async function runRoundTrip(): Promise<void> {
@@ -207,8 +332,13 @@ async function applyFilter(): Promise<void> {
   const query = filterInput?.value ?? "";
   setFilterStatus("Applying…");
   const out = await client.applyFilter(query);
-  if (out.ok) setFilterStatus(`Applied to DIM: ${out.query || "(empty)"}`, "ok");
-  else setFilterStatus(out.error, "err");
+  if (out.ok) {
+    setFilterStatus(`Applied to DIM: ${out.query || "(empty)"}`, "ok");
+    setResultsExpanded(true);
+    if (resultsTab === "matches") renderResultsList();
+  } else {
+    setFilterStatus(out.error, "err");
+  }
 }
 
 async function clearFilter(): Promise<void> {
@@ -217,8 +347,24 @@ async function clearFilter(): Promise<void> {
   if (out.ok) {
     if (filterInput) filterInput.value = "";
     setFilterStatus("Cleared DIM search", "ok");
+    if (resultsTab === "matches") renderResultsList();
   } else {
     setFilterStatus(out.error, "err");
+  }
+}
+
+async function copyFilter(): Promise<void> {
+  const text = filterInput?.value ?? "";
+  try {
+    await navigator.clipboard.writeText(text);
+    setFilterStatus(text ? "Copied filter to clipboard" : "Copied (empty)", "ok");
+  } catch {
+    // Fallback for restricted clipboard
+    if (filterInput) {
+      filterInput.focus();
+      filterInput.select();
+    }
+    setFilterStatus("Select filter text and copy manually", "err");
   }
 }
 
@@ -228,16 +374,17 @@ async function loadVault(): Promise<void> {
   if (!out.ok) {
     vaultItems = [];
     setVaultStatus(`Vault error: ${out.error}`, "err");
-    renderVaultList();
+    renderResultsList();
     return;
   }
   vaultItems = out.items;
   if (out.status.state === "ok") {
     setVaultStatus(`Vault: ${out.items.length} items (membership ${out.status.membershipId})`, "ok");
+    if (out.items.length > 0) setResultsExpanded(true);
   } else if (out.status.state === "empty" || out.status.state === "error") {
     setVaultStatus(out.status.message, "err");
   }
-  renderVaultList();
+  renderResultsList();
 }
 
 async function loadTrash(): Promise<void> {
@@ -253,12 +400,38 @@ async function loadTrash(): Promise<void> {
 }
 
 async function stageSelected(): Promise<void> {
+  // Snapshot selection for Selection filter rewrite before clear.
+  const selectedSnapshot = new Set(selectedVaultIds);
+  // Include Recs rows (vault-backed + agent-only) so synthetic recs can Stage by id.
+  const stagePool: VaultItem[] = [...vaultItems];
+  const seen = new Set(vaultItems.map((v) => v.id));
+  for (const row of recRowsFromAgent(agentRecs, vaultItems)) {
+    if (!seen.has(row.id)) {
+      stagePool.push(row);
+      seen.add(row.id);
+    }
+  }
+  const filterRewrite = selectionFilterAfterStage(stagePool, selectedSnapshot);
+
   // No confirmation modal — Stage is intentional and reversible via Unstage.
-  const out = await client.stage(vaultItems, selectedVaultIds);
+  // Does NOT auto-Apply the Selection filter to DIM.
+  const out = await client.stage(stagePool, selectedSnapshot);
   if (!out.ok) {
     setTrashStatus(out.error, "err");
+    setResultsStatus(out.error, "err");
     return;
   }
+
+  if (filterRewrite !== null && filterInput) {
+    filterInput.value = filterRewrite;
+    setFilterStatus(
+      filterRewrite
+        ? "Selection filter updated (not applied to DIM — click Apply)"
+        : "Selection had no instance ids for id: filter",
+      "ok",
+    );
+  }
+
   trashItems = out.items;
   selectedVaultIds.clear();
   let msg = TRASH_SAFE_COPY.stagedOk(out.staged.length);
@@ -266,8 +439,9 @@ async function stageSelected(): Promise<void> {
     msg += ` Denied ${out.denied.length} (exotic/favorite/already).`;
   }
   setTrashStatus(msg, out.staged.length > 0 ? "ok" : "err");
+  setResultsStatus(msg, out.staged.length > 0 ? "ok" : "err");
   renderTrashList();
-  renderVaultList();
+  renderResultsList();
 }
 
 async function unstageSelected(): Promise<void> {
@@ -285,6 +459,8 @@ async function unstageSelected(): Promise<void> {
 async function saveApiKey(): Promise<void> {
   const out = await client.saveApiKey(apiKeyInput?.value ?? "");
   if (out.ok) {
+    hasApiKey = true;
+    updateSuggestGating();
     setAgentStatus("API key saved in extension storage (not logged)", "ok");
     if (apiKeyInput) {
       apiKeyInput.value = "";
@@ -295,32 +471,75 @@ async function saveApiKey(): Promise<void> {
   }
 }
 
-async function runAgentLoop(): Promise<void> {
+async function loadSettings(): Promise<void> {
+  const out = await client.loadSettings();
+  if (out.ok) {
+    hasApiKey = out.hasKey;
+    if (hasApiKey && apiKeyInput) {
+      apiKeyInput.placeholder = "•••••••• (saved)";
+    }
+  }
+  updateSuggestGating();
+}
+
+/**
+ * Suggest: run agent, fill filter + explanation, open Results (Recs if any else Matches).
+ * Never auto-Applies or auto-Stages.
+ */
+async function runSuggest(): Promise<void> {
+  if (!hasApiKey) {
+    setAgentStatus("API key required — open Settings", "err");
+    openSettings();
+    return;
+  }
+  if (agentRunning) {
+    setAgentStatus("Agent already running — Cancel or wait", "err");
+    return;
+  }
+  const gen = ++suggestGeneration;
+  agentRunning = true;
+  updateSuggestGating();
   setAgentStatus("Running agent…");
   const out = await client.runAgent({
     intention: intentionInput?.value ?? "",
     vaultContextOptIn: vaultOptIn?.checked === true,
     vaultItems,
   });
+  // Only the latest generation owns the running flag (guards Cancel / double Enter).
+  if (gen === suggestGeneration) {
+    agentRunning = false;
+    updateSuggestGating();
+  }
+
   if (!out.ok) {
-    setAgentStatus(out.error === "cancelled" ? "Agent cancelled" : out.error, "err");
+    if (gen === suggestGeneration) {
+      setAgentStatus(out.error === "cancelled" ? "Agent cancelled" : out.error, "err");
+    }
     return;
   }
+  if (gen !== suggestGeneration) return;
+
   const result = out.result;
-  if (filterInput && result.filters[0]) {
-    filterInput.value = result.filters.join(" ");
+  // Fill filter card only — do not Apply to DIM.
+  if (filterInput) {
+    filterInput.value = filterTextFromAgentResult(result);
   }
   if (agentExplanationEl) {
     agentExplanationEl.textContent = result.explanation || "—";
   }
-  renderRecs(result.recommendations);
+  agentRecs = result.recommendations;
+  setResultsExpanded(true);
+  setResultsTab(resultsTabAfterSuggest(result));
   setAgentStatus(
-    `Agent done — ${result.filters.length} filter(s), ${result.recommendations.length} rec(s). Stage is manual.`,
+    `Suggest done — ${result.filters.length} filter(s), ${result.recommendations.length} rec(s). Stage and Apply are manual.`,
     "ok",
   );
 }
 
 async function cancelAgent(): Promise<void> {
+  suggestGeneration += 1;
+  agentRunning = false;
+  updateSuggestGating();
   await client.cancelAgent();
   setAgentStatus("Cancel requested", "err");
 }
@@ -341,13 +560,17 @@ async function repairMirror(): Promise<void> {
 
 async function init(): Promise<void> {
   if (trashHelpEl) trashHelpEl.textContent = TRASH_SAFE_COPY.sectionHelp;
+  updateTrashPeek();
+  updateSuggestGating();
 
   const ok = await client.ping();
   setStatus(ok ? "Background connected" : "Background not reachable", ok ? "ok" : "err");
-  btn?.addEventListener("click", () => {
+  await loadSettings();
+
+  btnRoundtrip?.addEventListener("click", () => {
     void runRoundTrip();
   });
-  btnRefresh?.addEventListener("click", () => {
+  btnRefreshVault?.addEventListener("click", () => {
     void loadVault();
   });
   btnApply?.addEventListener("click", () => {
@@ -356,10 +579,24 @@ async function init(): Promise<void> {
   btnClearFilter?.addEventListener("click", () => {
     void clearFilter();
   });
+  btnCopyFilter?.addEventListener("click", () => {
+    void copyFilter();
+  });
   filterInput?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void applyFilter();
+    }
+  });
+  // Keep Matches list in sync with the editable filter card.
+  filterInput?.addEventListener("input", () => {
+    if (resultsTab === "matches") renderResultsList();
+  });
+  // Enter Suggests; Shift+Enter newline
+  intentionInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void runSuggest();
     }
   });
   btnStage?.addEventListener("click", () => {
@@ -374,8 +611,8 @@ async function init(): Promise<void> {
   btnSaveKey?.addEventListener("click", () => {
     void saveApiKey();
   });
-  btnRunAgent?.addEventListener("click", () => {
-    void runAgentLoop();
+  btnSuggest?.addEventListener("click", () => {
+    void runSuggest();
   });
   btnCancelAgent?.addEventListener("click", () => {
     void cancelAgent();
@@ -383,18 +620,58 @@ async function init(): Promise<void> {
   btnRepairMirror?.addEventListener("click", () => {
     void repairMirror();
   });
-  vaultListEl?.addEventListener(
+  btnSettings?.addEventListener("click", () => openSettings());
+  btnSettingsClose?.addEventListener("click", () => closeSettings());
+  btnOpenSettingsCta?.addEventListener("click", () => openSettings());
+  settingsScrim?.addEventListener("click", (e) => {
+    if (e.target === settingsScrim) closeSettings();
+  });
+  // Simple focus trap while Settings is open (Tab cycles within sheet).
+  settingsScrim?.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab" || !settingsScrim || settingsScrim.hidden) return;
+    const sheet = document.getElementById("settings-sheet");
+    if (!sheet) return;
+    const focusable = [
+      ...sheet.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ].filter((el) => !el.hasAttribute("hidden") && el.offsetParent !== null);
+    if (focusable.length === 0) return;
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  });
+  btnTrashToggle?.addEventListener("click", () => {
+    trashExpanded = !trashExpanded;
+    updateTrashPeek();
+  });
+  tabMatches?.addEventListener("click", () => setResultsTab("matches"));
+  tabRecs?.addEventListener("click", () => setResultsTab("recs"));
+  resultsListEl?.addEventListener(
     "scroll",
     () => {
-      renderVaultList();
+      renderResultsList();
     },
     { passive: true },
   );
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && settingsScrim && !settingsScrim.hidden) {
+      closeSettings();
+    }
+  });
 
   // Refresh only while Workbench is focused (no background pollers / no closed-sidebar timers).
   window.addEventListener("focus", () => {
     void loadVault();
     void loadTrash();
+    void loadSettings();
   });
   window.addEventListener("pagehide", () => {
     selectedVaultIds.clear();
