@@ -1,5 +1,5 @@
 /**
- * Event-page background hub.
+ * Background hub (Firefox event page / Chromium service worker).
  * Sleeps when idle; routes Workbench ↔ Light messages. No long polling.
  */
 
@@ -20,6 +20,7 @@ import {
   type TrashUnstagePayload,
 } from "../messaging/index.js";
 import { DIM_URL_PATTERNS } from "../shared/dim.js";
+import { ensureBrowser } from "../shared/webext.js";
 import {
   handleTrashGet,
   handleTrashStage,
@@ -34,6 +35,9 @@ import {
   handleAgentSettingsGet,
   handleAgentSettingsSet,
 } from "./agent-handlers.js";
+import { installWorkbenchOpenOnAction } from "./workbench-open.js";
+
+ensureBrowser();
 
 async function queryDimTabs(): Promise<browser.tabs.Tab[]> {
   return browser.tabs.query({ url: [...DIM_URL_PATTERNS] });
@@ -162,6 +166,6 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
   return true;
 });
 
-browser.action.onClicked.addListener(() => {
-  void browser.sidebarAction.open();
-});
+// Toolbar → Workbench: Side Panel on Chromium; sidebarAction on Firefox.
+// Light chip never opens Workbench.
+installWorkbenchOpenOnAction(browser);

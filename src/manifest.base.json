@@ -3,12 +3,6 @@
   "name": "Vault Keeper",
   "version": "0.1.0",
   "description": "Intelligent vault cleanup companion for Destiny Item Manager. Stage gear to Trash; never dismantles in-game items.",
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "vault-keeper@d2vault-keeper.local",
-      "strict_min_version": "121.0"
-    }
-  },
   "permissions": ["storage"],
   "host_permissions": [
     "*://*.destinyitemmanager.com/*",
@@ -19,10 +13,6 @@
     "https://*/*",
     "http://localhost/*"
   ],
-  "background": {
-    "scripts": ["background.js"],
-    "type": "module"
-  },
   "content_scripts": [
     {
       "matches": [
@@ -32,19 +22,5 @@
       "js": ["content.js"],
       "run_at": "document_idle"
     }
-  ],
-  "sidebar_action": {
-    "default_title": "Vault Keeper",
-    "default_panel": "workbench.html",
-    "open_at_install": false
-  },
-  "action": {
-    "default_title": "Vault Keeper",
-    "default_area": "navbar"
-  },
-  "commands": {
-    "_execute_sidebar_action": {
-      "description": "Open Vault Keeper Workbench"
-    }
-  }
+  ]
 }

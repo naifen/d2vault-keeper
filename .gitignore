@@ -343,3 +343,9 @@ compose.local.yml
 *.tgz
 *.zip
 artifacts/
+
+# Build concurrency lock / WIP swap dirs
+.build.lock
+.dist-wip-*
+.dist-old-*
+.dist-stage-*

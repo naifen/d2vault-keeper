@@ -1,6 +1,6 @@
 /**
  * Light chip DOM — pure enough to unit-test without the content-script entry.
- * Click never opens Workbench (Firefox user-gesture rules).
+ * Click never opens Workbench (browser user-gesture rules).
  */
 
 export const CHIP_ID = "vault-keeper-light-chip";
