@@ -19,6 +19,11 @@ export interface VaultItem {
   /** DIM tag if supplied by a later enricher (favorite, junk, …). */
   tag?: string;
   isExotic?: boolean;
+  /**
+   * Best-effort perk/plug display names when profile sockets + defs allow.
+   * Absent or empty when unknown — never fabricated.
+   */
+  perks?: string[];
 }
 
 export type InventoryStatus =
@@ -40,6 +45,13 @@ export interface DestinyItemComponentLike {
   location?: number;
 }
 
+/** One socket entry from Destiny itemComponents.sockets (best-effort). */
+export interface DestinySocketEntryLike {
+  plugHash?: number;
+  isEnabled?: boolean;
+  isVisible?: boolean;
+}
+
 export interface DestinyProfileResponseLike {
   profileInventory?: {
     data?: {
@@ -49,6 +61,9 @@ export interface DestinyProfileResponseLike {
   itemComponents?: {
     instances?: {
       data?: Record<string, { primaryStat?: { value?: number } }>;
+    };
+    sockets?: {
+      data?: Record<string, { sockets?: DestinySocketEntryLike[] }>;
     };
   };
 }

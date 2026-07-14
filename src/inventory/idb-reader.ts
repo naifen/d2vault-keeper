@@ -12,6 +12,7 @@ import {
   enrichVaultItems,
   extractTagsFromDimApiProfile,
   MANIFEST_KEY_CANDIDATES,
+  plugHashesFromProfile,
 } from "./enrichment.js";
 import type { DefinitionMap, DestinyProfileResponseLike, InventoryStatus, VaultItem } from "./types.js";
 
@@ -76,9 +77,11 @@ export async function readVaultInventory(options: ReadVaultOptions): Promise<Inv
       }
       const dimApi = await options.idb.get(DIM_API_PROFILE_KEY);
       const tags = extractTagsFromDimApiProfile(dimApi, membershipId);
+      const plugHashesByItemId = plugHashesFromProfile(profile);
       items = enrichVaultItems(items, {
         ...(definitions !== undefined && definitions.size > 0 ? { definitions } : {}),
         tags,
+        ...(plugHashesByItemId.size > 0 ? { plugHashesByItemId } : {}),
       });
     }
 

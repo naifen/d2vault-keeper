@@ -1,10 +1,17 @@
 /**
  * Enrich vault items with Destiny definitions + DIM tags so Stage exclusions work.
+ * Best-effort perk/plug names when profile sockets + InventoryItem defs allow.
  * Pure helpers — I/O stays in idb-reader.
  * Tag extract lives in dim-api-profile (shared with Mirror write).
  */
 
-import type { DefinitionMap, ItemDefinitionLite, VaultItem } from "./types.js";
+import type {
+  DefinitionMap,
+  DestinyProfileResponseLike,
+  DestinySocketEntryLike,
+  ItemDefinitionLite,
+  VaultItem,
+} from "./types.js";
 import { TIER_TYPE_EXOTIC } from "./types.js";
 import {
   DIM_API_PROFILE_KEY,
@@ -14,6 +21,9 @@ import {
 
 export { DIM_API_PROFILE_KEY, extractTagsFromDimApiProfile, type TagByItemId };
 export { TIER_TYPE_EXOTIC };
+
+/** instanceId → enabled plug hashes (best-effort; empty map when sockets absent). */
+export type PlugHashesByItemId = ReadonlyMap<string, readonly number[]>;
 
 /** Common DIM idb-keyval keys for language tables (research: d2-manifest-*). */
 export const MANIFEST_KEY_CANDIDATES = [
@@ -83,12 +93,92 @@ export function applyTags(items: VaultItem[], tags: TagByItemId): VaultItem[] {
   });
 }
 
+/**
+ * Collect enabled plug hashes from Destiny profile sockets by instance id.
+ * Missing sockets table → empty map (never invents plugs).
+ */
+export function plugHashesFromProfile(
+  profile: DestinyProfileResponseLike | null | undefined,
+): PlugHashesByItemId {
+  const map = new Map<string, number[]>();
+  const data = profile?.itemComponents?.sockets?.data;
+  if (!data || typeof data !== "object") return map;
+
+  for (const [instanceId, entry] of Object.entries(data)) {
+    if (!instanceId || instanceId === "0") continue;
+    if (typeof entry !== "object" || entry === null) continue;
+    const sockets = (entry as { sockets?: DestinySocketEntryLike[] }).sockets;
+    if (!Array.isArray(sockets)) continue;
+    const hashes: number[] = [];
+    for (const sock of sockets) {
+      if (!sock || typeof sock !== "object") continue;
+      const plugHash = sock.plugHash;
+      if (typeof plugHash !== "number" || !Number.isFinite(plugHash) || plugHash <= 0) {
+        continue;
+      }
+      // Prefer enabled+visible plugs; omitted flags still take the hash (partial caches).
+      // isVisible === false hides trackers/inactive sockets that are not real perks.
+      if (sock.isEnabled === false || sock.isVisible === false) continue;
+      hashes.push(plugHash);
+    }
+    if (hashes.length > 0) map.set(instanceId, hashes);
+  }
+  return map;
+}
+
+/**
+ * Resolve plug hashes → display names via InventoryItem definitions.
+ * Unknown hashes are skipped — never invents names.
+ */
+export function perkNamesFromPlugHashes(
+  plugHashes: readonly number[],
+  definitions: DefinitionMap,
+): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const hash of plugHashes) {
+    const def = definitions.get(hash);
+    const name = def?.name?.trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
+}
+
+/**
+ * Attach optional `perks` when sockets + definitions resolve at least one name.
+ * Items without socket data or resolvable plugs are left unchanged (no fake perks).
+ */
+export function applyPerks(
+  items: VaultItem[],
+  plugHashesByItemId: PlugHashesByItemId,
+  definitions: DefinitionMap,
+): VaultItem[] {
+  if (plugHashesByItemId.size === 0 || definitions.size === 0) return items;
+  return items.map((item) => {
+    const hashes = plugHashesByItemId.get(item.id);
+    if (!hashes || hashes.length === 0) return item;
+    const perks = perkNamesFromPlugHashes(hashes, definitions);
+    if (perks.length === 0) return item;
+    return { ...item, perks };
+  });
+}
+
 export function enrichVaultItems(
   items: VaultItem[],
-  options: { definitions?: DefinitionMap; tags?: TagByItemId },
+  options: {
+    definitions?: DefinitionMap;
+    tags?: TagByItemId;
+    /** Profile sockets → plug hashes by instance id (best-effort perks). */
+    plugHashesByItemId?: PlugHashesByItemId;
+  },
 ): VaultItem[] {
   let out = items;
   if (options.definitions) out = applyDefinitions(out, options.definitions);
   if (options.tags) out = applyTags(out, options.tags);
+  if (options.definitions && options.plugHashesByItemId) {
+    out = applyPerks(out, options.plugHashesByItemId, options.definitions);
+  }
   return out;
 }
