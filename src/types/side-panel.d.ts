@@ -15,13 +15,3 @@ declare namespace browser.sidePanel {
   function setPanelBehavior(behavior: PanelBehavior): Promise<void>;
   function open(options: OpenOptions): Promise<void>;
 }
-
-interface BrowserWithSidePanel {
-  sidePanel?: {
-    setPanelBehavior: (behavior: browser.sidePanel.PanelBehavior) => Promise<void>;
-    open: (options: browser.sidePanel.OpenOptions) => Promise<void>;
-  };
-}
-
-// Ambient `browser` is already declared by @types/firefox-webext-browser;
-// runtime may also expose sidePanel on Chromium.

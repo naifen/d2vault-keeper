@@ -8,10 +8,26 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import {
   installWorkbenchOpenOnAction,
+  sidePanelOpenOptions,
   type WorkbenchOpenApis,
 } from "../src/background/workbench-open.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+describe("sidePanelOpenOptions", () => {
+  it("prefers windowId over tabId", () => {
+    expect(sidePanelOpenOptions({ id: 1, windowId: 7 })).toEqual({ windowId: 7 });
+  });
+
+  it("falls back to tabId when windowId absent", () => {
+    expect(sidePanelOpenOptions({ id: 3 })).toEqual({ tabId: 3 });
+  });
+
+  it("returns undefined when neither id is usable", () => {
+    expect(sidePanelOpenOptions({})).toBeUndefined();
+    expect(sidePanelOpenOptions({ id: undefined, windowId: undefined })).toBeUndefined();
+  });
+});
 
 describe("installWorkbenchOpenOnAction", () => {
   it("Chromium: setPanelBehavior openPanelOnActionClick; no sidebarAction listener", () => {
@@ -32,7 +48,7 @@ describe("installWorkbenchOpenOnAction", () => {
   it("Chromium: setPanelBehavior reject installs gesture open fallback", async () => {
     const setPanelBehavior = vi.fn().mockRejectedValue(new Error("no perm"));
     const open = vi.fn().mockResolvedValue(undefined);
-    const listeners: Array<(tab?: { id?: number; windowId?: number }) => void> = [];
+    const listeners: Array<(tab: { id?: number; windowId?: number }) => void> = [];
     const api: WorkbenchOpenApis = {
       sidePanel: { setPanelBehavior, open },
       action: {
@@ -50,6 +66,29 @@ describe("installWorkbenchOpenOnAction", () => {
     expect(open).toHaveBeenCalledWith({ windowId: 7 });
   });
 
+  it("Chromium: setPanelBehavior sync throw installs gesture open fallback", async () => {
+    const setPanelBehavior = vi.fn().mockImplementation(() => {
+      throw new Error("sync boom");
+    });
+    const open = vi.fn().mockResolvedValue(undefined);
+    const listeners: Array<(tab: { id?: number; windowId?: number }) => void> = [];
+    const api: WorkbenchOpenApis = {
+      sidePanel: { setPanelBehavior, open },
+      action: {
+        onClicked: {
+          addListener: (cb) => {
+            listeners.push(cb);
+          },
+        },
+      },
+    };
+
+    expect(installWorkbenchOpenOnAction(api)).toBe("sidePanel");
+    await vi.waitFor(() => expect(listeners).toHaveLength(1));
+    listeners[0]!({ id: 9 });
+    expect(open).toHaveBeenCalledWith({ tabId: 9 });
+  });
+
   it("Firefox: action click opens sidebarAction", () => {
     const sidebarOpen = vi.fn().mockResolvedValue(undefined);
     const listeners: Array<() => void> = [];
@@ -58,7 +97,7 @@ describe("installWorkbenchOpenOnAction", () => {
       action: {
         onClicked: {
           addListener: (cb) => {
-            listeners.push(cb);
+            listeners.push(cb as () => void);
           },
         },
       },
@@ -70,6 +109,15 @@ describe("installWorkbenchOpenOnAction", () => {
     expect(listeners).toHaveLength(1);
     listeners[0]!();
     expect(sidebarOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not register dead listener when neither open API is usable", () => {
+    const onClickedAdd = vi.fn();
+    const mode = installWorkbenchOpenOnAction({
+      action: { onClicked: { addListener: onClickedAdd } },
+    });
+    expect(mode).toBe("sidebarAction");
+    expect(onClickedAdd).not.toHaveBeenCalled();
   });
 
   it("prefers Side Panel when both APIs present (Chromium-shaped dual)", () => {
@@ -112,5 +160,13 @@ describe("Light chip must not open Workbench", () => {
     expect(chip.getAttribute("aria-label")).toMatch(/does not open Workbench/i);
     expect(chip.title).not.toBe(before);
     expect(chip.title).toMatch(/toolbar or sidebar/i);
+  });
+});
+
+describe("background install call site (type contract)", () => {
+  it("background index passes browser without cast to installWorkbenchOpenOnAction", () => {
+    const src = readFileSync(join(root, "src/background/index.ts"), "utf8");
+    expect(src).toMatch(/installWorkbenchOpenOnAction\(\s*browser\s*\)/);
+    expect(src).not.toMatch(/installWorkbenchOpenOnAction\(\s*browser\s+as\s/);
   });
 });

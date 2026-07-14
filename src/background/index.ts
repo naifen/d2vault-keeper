@@ -168,4 +168,4 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
 
 // Toolbar → Workbench: Side Panel on Chromium; sidebarAction on Firefox.
 // Light chip never opens Workbench.
-installWorkbenchOpenOnAction(browser as Parameters<typeof installWorkbenchOpenOnAction>[0]);
+installWorkbenchOpenOnAction(browser);
