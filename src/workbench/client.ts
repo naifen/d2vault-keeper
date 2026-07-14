@@ -22,6 +22,7 @@ import {
 } from "../trash/index.js";
 import {
   intentionToAgentRequest,
+  isApiKeyMask,
   type AgentRecommendation,
   type AgentResult,
 } from "../agent/index.js";
@@ -244,7 +245,7 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
 
     async saveApiKey(apiKey) {
       const trimmed = apiKey.trim();
-      if (!trimmed || trimmed === "••••••••") {
+      if (!trimmed || isApiKeyMask(trimmed)) {
         return bad("Enter a new API key to update (empty save ignored)");
       }
       try {
