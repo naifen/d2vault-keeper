@@ -23,3 +23,12 @@ export {
   type TrashStorage,
 } from "./store.js";
 export { createBrowserTrashStorage } from "./browser-storage.js";
+export {
+  createStageMirrorUseCase,
+  type StageMirrorPorts,
+  type StageMirrorUseCase,
+  type StageOutcome,
+  type UnstageOutcome,
+  type RepairMirrorOutcome,
+  type MirrorClearSummary,
+} from "./use-case.js";
