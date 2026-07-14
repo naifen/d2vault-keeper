@@ -43,3 +43,4 @@ Agent
 
 - Live headed DIM QA remains manual (project standard). Automated bar: typecheck + tests + dual-target build.
 - Agent rec filtering without vault needs exclusion fields on the model payload (now preserved if present); Stage always enforces on Stage.
+- Vault resolve is authoritative over model fields for exclusion (`mergeExclusionSubject`); `isExotic` is kept on vault slice (Stage parity).

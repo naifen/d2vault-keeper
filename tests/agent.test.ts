@@ -3,6 +3,7 @@ import {
   agentMessages,
   completionBody,
   createAgentController,
+  intentionToAgentRequest,
   parseAgentResponse,
   redactSettings,
   requestIncludesVaultDump,
@@ -233,6 +234,47 @@ describe("runAgent mocked HTTP", () => {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
     expect(result.recommendations.map((r) => r.id)).toEqual(["a"]);
+  });
+
+  it("vault isExotic wins over model isExotic:false (shipped intention→run path)", async () => {
+    const request = intentionToAgentRequest({
+      intention: "junk",
+      vaultContextOptIn: true,
+      vaultItems: [
+        { id: "ex", itemHash: 2, name: "Hawk", isExotic: true },
+        { id: "leg", itemHash: 1, name: "Trust", tierType: "Legendary", isExotic: false },
+      ],
+    });
+    expect(request.vaultSlice?.find((r) => r.id === "ex")?.isExotic).toBe(true);
+
+    const fetchFn = vi.fn(async () => {
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  filters: [],
+                  explanation: "model lies",
+                  recommendations: [
+                    { id: "ex", itemHash: 2, name: "Hawk", isExotic: false, tierType: "Legendary" },
+                    { id: "leg", itemHash: 1, name: "Trust" },
+                  ],
+                }),
+              },
+            },
+          ],
+        }),
+      } as Response;
+    });
+
+    const result = await runAgent({
+      settings,
+      request,
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.recommendations.map((r) => r.id)).toEqual(["leg"]);
   });
 });
 

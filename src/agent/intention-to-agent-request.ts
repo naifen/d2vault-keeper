@@ -1,9 +1,10 @@
 /**
  * Product step: Intention → AgentRequest (vault opt-in + slice bound).
  * Pure policy — not Workbench DOM, not HTTP.
+ * Preserves exclusion fields (isExotic, tierType, tag) for Agent post-filter.
  */
 
-import type { AgentRequest } from "./types.js";
+import type { AgentRequest, AgentVaultSliceRow } from "./types.js";
 
 export const DEFAULT_VAULT_SLICE_LIMIT = 200;
 
@@ -14,6 +15,8 @@ export interface VaultViewItem {
   name: string;
   tierType?: string;
   tag?: string;
+  /** Same exotic signal Stage keeps via stage-map — required for vault-aware exclusion. */
+  isExotic?: boolean;
 }
 
 export interface IntentionToAgentRequestInput {
@@ -24,16 +27,15 @@ export interface IntentionToAgentRequestInput {
   vaultSliceLimit?: number;
 }
 
-function toVaultSliceRow(
-  v: VaultViewItem,
-): { id: string; itemHash: number; name: string; tierType?: string; tag?: string } {
-  const row: { id: string; itemHash: number; name: string; tierType?: string; tag?: string } = {
+function toVaultSliceRow(v: VaultViewItem): AgentVaultSliceRow {
+  const row: AgentVaultSliceRow = {
     id: v.id,
     itemHash: v.itemHash,
     name: v.name,
   };
   if (v.tierType !== undefined) row.tierType = v.tierType;
   if (v.tag !== undefined) row.tag = v.tag;
+  if (v.isExotic !== undefined) row.isExotic = v.isExotic;
   return row;
 }
 

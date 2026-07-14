@@ -42,8 +42,28 @@ export function canStageDefault(candidate: StageCandidate): boolean {
 }
 
 /**
+ * Merge exclusion fields for a recommendation.
+ * Vault/resolve is authoritative when present — model cannot weaken protection
+ * (e.g. isExotic:false or tag:keep must not shadow vault Exotic/favorite).
+ * Rec fields fill gaps only when resolve omits them.
+ */
+export function mergeExclusionSubject(
+  rec: ExclusionSubject,
+  resolved?: ExclusionSubject,
+): ExclusionSubject {
+  const subject: ExclusionSubject = {};
+  const isExotic = resolved?.isExotic ?? rec.isExotic;
+  const tierType = resolved?.tierType ?? rec.tierType;
+  const tag = resolved?.tag ?? rec.tag;
+  if (isExotic !== undefined) subject.isExotic = isExotic;
+  if (tierType !== undefined) subject.tierType = tierType;
+  if (tag !== undefined) subject.tag = tag;
+  return subject;
+}
+
+/**
  * Drop recommendations that violate Favorite/Exotic exclusion.
- * When `resolve` is provided (e.g. vault slice by id), merge lookup fields with the rec.
+ * When `resolve` is provided (e.g. vault slice by id), vault fields win over rec.
  * Unknown subjects (no exclusion fields) pass through — cannot invent protection.
  */
 export function filterExcludedRecommendations<
@@ -51,13 +71,6 @@ export function filterExcludedRecommendations<
 >(recs: readonly T[], resolve?: (id: string) => ExclusionSubject | undefined): T[] {
   return recs.filter((rec) => {
     const looked = resolve?.(rec.id);
-    const subject: ExclusionSubject = {};
-    const isExotic = rec.isExotic ?? looked?.isExotic;
-    const tierType = rec.tierType ?? looked?.tierType;
-    const tag = rec.tag ?? looked?.tag;
-    if (isExotic !== undefined) subject.isExotic = isExotic;
-    if (tierType !== undefined) subject.tierType = tierType;
-    if (tag !== undefined) subject.tag = tag;
-    return exclusionDenialReason(subject) === null;
+    return exclusionDenialReason(mergeExclusionSubject(rec, looked)) === null;
   });
 }

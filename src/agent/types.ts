@@ -22,11 +22,21 @@ export interface AgentResult {
   recommendations: AgentRecommendation[];
 }
 
+export interface AgentVaultSliceRow {
+  id: string;
+  itemHash: number;
+  name: string;
+  tierType?: string;
+  tag?: string;
+  /** Preserved for Favorite/Exotic exclusion post-filter (same signal as Stage). */
+  isExotic?: boolean;
+}
+
 export interface AgentRequest {
   intention: string;
   /** Only include vault slice when user opted in for this run. */
   vaultContextOptIn: boolean;
-  vaultSlice?: Array<{ id: string; itemHash: number; name: string; tierType?: string; tag?: string }>;
+  vaultSlice?: AgentVaultSliceRow[];
 }
 
 export const AGENT_SETTINGS_KEY = "vault-keeper-agent-settings";

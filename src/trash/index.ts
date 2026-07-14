@@ -13,6 +13,7 @@ export {
   filterExcludedRecommendations,
   isExoticItem,
   isFavoriteTagged,
+  mergeExclusionSubject,
   stageDenialReason,
   type ExclusionSubject,
 } from "./exclusions.js";

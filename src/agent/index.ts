@@ -3,6 +3,7 @@ export type {
   AgentRequest,
   AgentResult,
   AgentRecommendation,
+  AgentVaultSliceRow,
 } from "./types.js";
 export {
   AGENT_SETTINGS_KEY,
