@@ -1,5 +1,6 @@
 /**
- * Mirror write path: persist junk tags via dim-api-profile mutator + IdbKeyval.
+ * Page/IDB MirrorBridge adapter.
+ * Membership resolve + dim-api-profile mutate + IDB write in one place.
  * Pure blob rules live in dim-api-profile (shared with Favorite tag read).
  */
 
@@ -9,52 +10,76 @@ import {
   JUNK_TAG,
   mutateDimApiProfileTag,
 } from "../dim-api-profile/index.js";
-import type { TagDomHooks } from "./tags.js";
+import type { MirrorBridge } from "../mirror/index.js";
 
-export interface DimApiProfileMutatorOptions {
+export interface IdbMirrorBridgeOptions {
   idb: IdbKeyval;
   membershipId: string;
   destinyVersion?: number;
 }
 
-export function createIdbTagHooks(options: DimApiProfileMutatorOptions): TagDomHooks {
+async function writeJunkTag(
+  options: IdbMirrorBridgeOptions,
+  itemId: string,
+  tag: typeof JUNK_TAG | null,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!options.idb.set) {
+    return { ok: false, error: "IDB set unavailable" };
+  }
+  if (!itemId || itemId === "0") {
+    return { ok: false, error: "invalid item id" };
+  }
   const destinyVersion = options.destinyVersion ?? 2;
+  try {
+    const current = await options.idb.get(DIM_API_PROFILE_KEY);
+    const { next, changed } = mutateDimApiProfileTag(
+      current,
+      itemId,
+      tag,
+      options.membershipId,
+      destinyVersion,
+    );
+    if (!changed && tag === null) {
+      // Nothing to clear — treat as success (policy already gated who we clear).
+      return { ok: true };
+    }
+    await options.idb.set(DIM_API_PROFILE_KEY, next);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** Fixed-membership IDB Mirror adapter (tests + explicit membership). */
+export function createIdbMirrorBridge(options: IdbMirrorBridgeOptions): MirrorBridge {
   return {
-    async setTag(itemId: string, tag: typeof JUNK_TAG | null): Promise<boolean> {
-      if (!options.idb.set) {
-        return false;
-      }
-      if (!itemId || itemId === "0") return false;
-      const current = await options.idb.get(DIM_API_PROFILE_KEY);
-      const { next, changed } = mutateDimApiProfileTag(
-        current,
-        itemId,
-        tag,
-        options.membershipId,
-        destinyVersion,
-      );
-      if (!changed && tag === null) {
-        // Nothing to clear — treat as success (policy already gated who we clear).
-        return true;
-      }
-      await options.idb.set(DIM_API_PROFILE_KEY, next);
-      return true;
+    async setJunkTag(itemId: string) {
+      return writeJunkTag(options, itemId, JUNK_TAG);
+    },
+    async clearJunkTag(itemId: string) {
+      return writeJunkTag(options, itemId, null);
     },
   };
 }
 
 /**
- * Build hooks that resolve membership from localStorage each call.
+ * Page production adapter: resolve membership from localStorage each call,
+ * then write junk via dim-api-profile + IDB.
  */
-export function createBrowserIdbTagHooks(
+export function createBrowserIdbMirrorBridge(
   idb: IdbKeyval,
   getMembershipId: () => string | null,
-): TagDomHooks {
+): MirrorBridge {
   return {
-    async setTag(itemId, tag) {
+    async setJunkTag(itemId: string) {
       const membershipId = getMembershipId();
-      if (!membershipId) return false;
-      return createIdbTagHooks({ idb, membershipId }).setTag(itemId, tag);
+      if (!membershipId) return { ok: false, error: "membership unavailable" };
+      return createIdbMirrorBridge({ idb, membershipId }).setJunkTag(itemId);
+    },
+    async clearJunkTag(itemId: string) {
+      const membershipId = getMembershipId();
+      if (!membershipId) return { ok: false, error: "membership unavailable" };
+      return createIdbMirrorBridge({ idb, membershipId }).clearJunkTag(itemId);
     },
   };
 }

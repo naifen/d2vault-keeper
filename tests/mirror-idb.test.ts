@@ -3,8 +3,8 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  createIdbTagHooks,
-  createMirrorBridgeFromHooks,
+  createBrowserIdbMirrorBridge,
+  createIdbMirrorBridge,
   mutateDimApiProfileTag,
 } from "../src/dim-bridge/index.js";
 import { DIM_API_PROFILE_KEY, type IdbKeyval } from "../src/inventory/index.js";
@@ -60,8 +60,7 @@ describe("mutateDimApiProfileTag", () => {
 describe("IDB Mirror bridge (shipped path)", () => {
   it("Stage mirror marks ok when IDB write succeeds", async () => {
     const data: Record<string, unknown> = {};
-    const hooks = createIdbTagHooks({ idb: memIdb(data), membershipId: "42" });
-    const bridge = createMirrorBridgeFromHooks(hooks);
+    const bridge = createIdbMirrorBridge({ idb: memIdb(data), membershipId: "42" });
 
     const { result } = stageItems(emptyTrashState(), [
       { id: "inst-1", itemHash: 1, name: "Gun" },
@@ -75,5 +74,16 @@ describe("IDB Mirror bridge (shipped path)", () => {
       profiles: { "42-d2": { tags: { "inst-1": { tag: string } } } };
     };
     expect(stored.profiles["42-d2"].tags["inst-1"].tag).toBe("junk");
+  });
+
+  it("clearJunkTag removes junk; membership miss fails soft", async () => {
+    const data: Record<string, unknown> = {};
+    const bridge = createIdbMirrorBridge({ idb: memIdb(data), membershipId: "42" });
+    expect((await bridge.setJunkTag("i1")).ok).toBe(true);
+    expect((await bridge.clearJunkTag("i1")).ok).toBe(true);
+    expect((await bridge.clearJunkTag("ghost")).ok).toBe(true);
+
+    const noMem = createBrowserIdbMirrorBridge(memIdb({}), () => null);
+    expect((await noMem.setJunkTag("x")).ok).toBe(false);
   });
 });
