@@ -10,16 +10,16 @@ export {
 } from "./types.js";
 export { parseAgentResponse } from "./parse.js";
 export {
-  buildAgentMessages,
-  buildCompletionBody,
+  agentMessages,
+  completionBody,
   requestIncludesVaultDump,
-} from "./build-request.js";
+} from "./completion-body.js";
 export {
-  buildAgentRequest,
+  intentionToAgentRequest,
   DEFAULT_VAULT_SLICE_LIMIT,
-  type BuildAgentRequestInput,
+  type IntentionToAgentRequestInput,
   type VaultViewItem,
-} from "./build-agent-request.js";
+} from "./intention-to-agent-request.js";
 export {
   runAgent,
   createAgentController,

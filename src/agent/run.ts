@@ -5,7 +5,7 @@
  */
 
 import { filterExcludedRecommendations } from "../trash/exclusions.js";
-import { buildCompletionBody } from "./build-request.js";
+import { completionBody } from "./completion-body.js";
 import { parseAgentResponse } from "./parse.js";
 import type { AgentRequest, AgentResult, AgentSettings } from "./types.js";
 
@@ -35,7 +35,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
     : { intention: request.intention, vaultContextOptIn: false };
 
   const url = `${settings.baseUrl.replace(/\/$/, "")}/chat/completions`;
-  const body = buildCompletionBody(settings, safeRequest);
+  const body = completionBody(settings, safeRequest);
 
   const init: RequestInit = {
     method: "POST",

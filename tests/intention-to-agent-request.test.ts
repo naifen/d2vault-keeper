@@ -1,9 +1,9 @@
 /**
- * Intention → AgentRequest pure policy (shipped buildAgentRequest).
+ * Product step: Intention → AgentRequest (shipped intentionToAgentRequest).
  */
 import { describe, expect, it } from "vitest";
 import {
-  buildAgentRequest,
+  intentionToAgentRequest,
   DEFAULT_VAULT_SLICE_LIMIT,
   requestIncludesVaultDump,
 } from "../src/agent/index.js";
@@ -29,9 +29,9 @@ const items = Array.from({ length: 250 }, (_, i) => {
   return row;
 });
 
-describe("buildAgentRequest (shipped)", () => {
+describe("intentionToAgentRequest (shipped)", () => {
   it("strips vault when opt-in false even if items provided", () => {
-    const req = buildAgentRequest({
+    const req = intentionToAgentRequest({
       intention: "junk sidearms",
       vaultContextOptIn: false,
       vaultItems: items,
@@ -41,7 +41,7 @@ describe("buildAgentRequest (shipped)", () => {
   });
 
   it("includes field subset and enforces hard cap when opt-in true", () => {
-    const req = buildAgentRequest({
+    const req = intentionToAgentRequest({
       intention: "clean vault",
       vaultContextOptIn: true,
       vaultItems: items,
@@ -61,7 +61,7 @@ describe("buildAgentRequest (shipped)", () => {
   });
 
   it("respects custom limit", () => {
-    const req = buildAgentRequest({
+    const req = intentionToAgentRequest({
       intention: "x",
       vaultContextOptIn: true,
       vaultItems: items,

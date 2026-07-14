@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  buildAgentMessages,
-  buildCompletionBody,
+  agentMessages,
+  completionBody,
   createAgentController,
   parseAgentResponse,
   redactSettings,
@@ -51,8 +51,8 @@ describe("vault opt-in gate", () => {
       vaultContextOptIn: false,
       vaultSlice: [{ id: "1", itemHash: 1, name: "Secret" }],
     };
-    // buildAgentMessages still sees slice only if opt-in true — runAgent strips.
-    const messages = buildAgentMessages({
+    // agentMessages still sees slice only if opt-in true — runAgent strips.
+    const messages = agentMessages({
       intention: req.intention,
       vaultContextOptIn: false,
     });
@@ -69,7 +69,7 @@ describe("vault opt-in gate", () => {
       vaultSlice: [{ id: "1", itemHash: 1, name: "Trust" }],
     };
     expect(requestIncludesVaultDump(req)).toBe(true);
-    expect(JSON.stringify(buildAgentMessages(req))).toContain("Trust");
+    expect(JSON.stringify(agentMessages(req))).toContain("Trust");
   });
 });
 
@@ -138,8 +138,8 @@ describe("runAgent mocked HTTP", () => {
     await expect(p).rejects.toMatchObject({ name: "AbortError" });
   });
 
-  it("buildCompletionBody uses model", () => {
-    const body = buildCompletionBody(settings, {
+  it("completionBody uses model", () => {
+    const body = completionBody(settings, {
       intention: "x",
       vaultContextOptIn: false,
     });

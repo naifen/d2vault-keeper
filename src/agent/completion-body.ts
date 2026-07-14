@@ -1,10 +1,11 @@
+/**
+ * Product step: AgentRequest → HTTP completion body / chat messages.
+ * Never include vault dump unless opt-in. Does not log API keys.
+ */
+
 import type { AgentRequest, AgentSettings } from "./types.js";
 
-/**
- * Build chat completion body. Never include vault dump unless opt-in.
- * Does not log API keys.
- */
-export function buildAgentMessages(req: AgentRequest): Array<{ role: string; content: string }> {
+export function agentMessages(req: AgentRequest): Array<{ role: string; content: string }> {
   const system = [
     "You are Vault Keeper Agent for Destiny Item Manager.",
     "Return ONLY JSON: {\"filters\":[\"dim filter strings\"],\"explanation\":\"short\",\"recommendations\":[{\"id\",\"itemHash\",\"name\",\"reason\"}?]}",
@@ -27,10 +28,10 @@ export function buildAgentMessages(req: AgentRequest): Array<{ role: string; con
   ];
 }
 
-export function buildCompletionBody(settings: AgentSettings, req: AgentRequest): Record<string, unknown> {
+export function completionBody(settings: AgentSettings, req: AgentRequest): Record<string, unknown> {
   return {
     model: settings.model,
-    messages: buildAgentMessages(req),
+    messages: agentMessages(req),
     temperature: 0.2,
   };
 }

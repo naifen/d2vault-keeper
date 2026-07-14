@@ -21,7 +21,7 @@ import {
   type TrashState,
 } from "../trash/index.js";
 import {
-  buildAgentRequest,
+  intentionToAgentRequest,
   type AgentRecommendation,
   type AgentResult,
 } from "../agent/index.js";
@@ -258,7 +258,7 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
     },
 
     async runAgent(input) {
-      const payload = buildAgentRequest({
+      const payload = intentionToAgentRequest({
         intention: input.intention,
         vaultContextOptIn: input.vaultContextOptIn,
         vaultItems: input.vaultItems,

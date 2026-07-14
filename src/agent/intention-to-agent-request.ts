@@ -1,6 +1,6 @@
 /**
- * Pure Intention → AgentRequest policy.
- * Opt-in, field subset, and hard vault slice bound live here — not in Workbench DOM.
+ * Product step: Intention → AgentRequest (vault opt-in + slice bound).
+ * Pure policy — not Workbench DOM, not HTTP.
  */
 
 import type { AgentRequest } from "./types.js";
@@ -16,7 +16,7 @@ export interface VaultViewItem {
   tag?: string;
 }
 
-export interface BuildAgentRequestInput {
+export interface IntentionToAgentRequestInput {
   intention: string;
   vaultContextOptIn: boolean;
   /** Full or partial vault view; only used when opt-in true. */
@@ -38,10 +38,10 @@ function toVaultSliceRow(
 }
 
 /**
- * Build AgentRequest from Intention + opt-in + vault view.
+ * Intention + opt-in + vault view → AgentRequest.
  * When opt-in is false, vault slice is omitted regardless of vaultItems.
  */
-export function buildAgentRequest(input: BuildAgentRequestInput): AgentRequest {
+export function intentionToAgentRequest(input: IntentionToAgentRequestInput): AgentRequest {
   const limit = input.vaultSliceLimit ?? DEFAULT_VAULT_SLICE_LIMIT;
   if (!input.vaultContextOptIn) {
     return {
