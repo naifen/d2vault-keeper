@@ -9,7 +9,7 @@ import {
   type MirrorBridge,
 } from "../src/mirror/index.js";
 import { emptyTrashState, stageItems, type TrashRecord } from "../src/trash/index.js";
-import { createMirrorBridgeFromHooks } from "../src/dim-bridge/index.js";
+import { createMessagingMirrorBridge } from "../src/dim-bridge/index.js";
 
 function rec(partial: Partial<TrashRecord> & Pick<TrashRecord, "id">): TrashRecord {
   return {
@@ -89,13 +89,25 @@ describe("Repair Mirror selection", () => {
   });
 });
 
-describe("mockable dim-bridge tag adapter", () => {
-  it("createMirrorBridgeFromHooks uses injected hooks", async () => {
-    const setTag = vi.fn(async (_id: string, tag: "junk" | null) => tag === "junk" || tag === null);
-    const bridge = createMirrorBridgeFromHooks({ setTag });
+describe("messaging MirrorBridge adapter", () => {
+  it("createMessagingMirrorBridge maps set/clear to sendToLight", async () => {
+    const send = vi.fn(async (kind: "mirror-set" | "mirror-clear", itemId: string) => {
+      expect(itemId).toBe("abc");
+      return kind === "mirror-set" || kind === "mirror-clear";
+    });
+    const bridge = createMessagingMirrorBridge(send);
     expect((await bridge.setJunkTag("abc")).ok).toBe(true);
     expect((await bridge.clearJunkTag("abc")).ok).toBe(true);
-    expect(setTag).toHaveBeenCalledWith("abc", "junk");
-    expect(setTag).toHaveBeenCalledWith("abc", null);
+    expect(send).toHaveBeenCalledWith("mirror-set", "abc");
+    expect(send).toHaveBeenCalledWith("mirror-clear", "abc");
+  });
+
+  it("createMessagingMirrorBridge soft-fails on false/throw", async () => {
+    const bridgeFalse = createMessagingMirrorBridge(async () => false);
+    expect((await bridgeFalse.setJunkTag("x")).ok).toBe(false);
+    const bridgeThrow = createMessagingMirrorBridge(async () => {
+      throw new Error("tab gone");
+    });
+    expect((await bridgeThrow.clearJunkTag("x")).error).toMatch(/tab gone/);
   });
 });

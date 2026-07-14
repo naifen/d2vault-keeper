@@ -1,42 +1,30 @@
+/**
+ * Thin envelope adapter: maps trash-* messages ↔ StageMirrorUseCase.
+ * Product rules live in trash/use-case — not here.
+ */
+
 import {
   createBrowserTrashStorage,
-  loadTrash,
-  saveTrash,
-  stageItems,
-  unstageItems,
+  createStageMirrorUseCase,
   type StageCandidate,
-  type TrashRecord,
   type TrashState,
   type TrashStorage,
 } from "../trash/index.js";
-import {
-  mirrorStageBatch,
-  mirrorUnstageBatch,
-  recordsNeedingRepair,
-  type MirrorBridge,
-} from "../mirror/index.js";
+import type { MirrorBridge } from "../mirror/index.js";
 import { createEnvelope, type Envelope } from "../messaging/index.js";
 
 let storage: TrashStorage | null = null;
-
 let mirrorBridge: MirrorBridge | null = null;
 
-/** Serialize Trash RMW so concurrent stage/unstage cannot drop items. */
-let mutationTail: Promise<unknown> = Promise.resolve();
-
-function getStorage(): TrashStorage {
-  if (!storage) storage = createBrowserTrashStorage();
-  return storage;
-}
-
-function runTrashMutation<T>(fn: () => Promise<T>): Promise<T> {
-  const run = mutationTail.then(fn, fn);
-  mutationTail = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return run;
-}
+const useCase = createStageMirrorUseCase({
+  getStorage(): TrashStorage {
+    if (!storage) storage = createBrowserTrashStorage();
+    return storage;
+  },
+  getMirrorBridge(): MirrorBridge | null {
+    return mirrorBridge;
+  },
+});
 
 /** Inject mockable Mirror bridge (tests + production messaging adapter). */
 export function setMirrorBridge(bridge: MirrorBridge | null): void {
@@ -48,16 +36,8 @@ export function setTrashStorage(next: TrashStorage): void {
   storage = next;
 }
 
-function mergeMirrored(state: TrashState, mirrored: TrashRecord[]): TrashState {
-  const byId = new Map(mirrored.map((r) => [r.id, r]));
-  return {
-    version: 1,
-    items: state.items.map((r) => byId.get(r.id) ?? r),
-  };
-}
-
 export async function handleTrashGet(requestId: string): Promise<Envelope> {
-  const state = await loadTrash(getStorage());
+  const state = await useCase.getTrash();
   return createEnvelope("trash-result", requestId, {
     ok: true,
     action: "get",
@@ -69,29 +49,15 @@ export async function handleTrashStage(
   requestId: string,
   candidates: StageCandidate[],
 ): Promise<Envelope> {
-  return runTrashMutation(async () => {
-    const store = getStorage();
-    const current = await loadTrash(store);
-    const { state: stagedState, result } = stageItems(current, candidates);
-    // Persist Trash first — Mirror failure must not roll back Stage.
-    await saveTrash(store, stagedState);
-
-    let state = stagedState;
-    if (mirrorBridge && result.staged.length > 0) {
-      const mirrored = await mirrorStageBatch(result.staged, mirrorBridge);
-      state = mergeMirrored(stagedState, mirrored);
-      await saveTrash(store, state);
-    }
-
-    return createEnvelope("trash-result", requestId, {
-      ok: true,
-      action: "stage",
-      state,
-      result: {
-        staged: state.items.filter((i) => result.staged.some((s) => s.id === i.id)),
-        denied: result.denied,
-      },
-    });
+  const { state, result } = await useCase.stage(candidates);
+  return createEnvelope("trash-result", requestId, {
+    ok: true,
+    action: "stage",
+    state,
+    result: {
+      staged: result.staged,
+      denied: result.denied,
+    },
   });
 }
 
@@ -99,59 +65,38 @@ export async function handleTrashUnstage(
   requestId: string,
   ids: string[],
 ): Promise<Envelope> {
-  return runTrashMutation(async () => {
-    const store = getStorage();
-    const current = await loadTrash(store);
-    const toRemove = current.items.filter((i) => ids.includes(i.id));
-    const { state, removed } = unstageItems(current, ids);
-    // Persist Trash removal first.
-    await saveTrash(store, state);
-
-    let clearSummary: { cleared: string[]; skipped: string[]; errors: string[] } | undefined;
-    if (mirrorBridge && toRemove.length > 0) {
-      clearSummary = await mirrorUnstageBatch(toRemove, mirrorBridge);
-    }
-
-    return createEnvelope("trash-result", requestId, {
-      ok: true,
-      action: "unstage",
-      state,
-      removed,
-      mirror: clearSummary,
-    });
-  });
+  const { state, removed, mirror } = await useCase.unstage(ids);
+  const payload: {
+    ok: true;
+    action: "unstage";
+    state: typeof state;
+    removed: typeof removed;
+    mirror?: typeof mirror;
+  } = {
+    ok: true,
+    action: "unstage",
+    state,
+    removed,
+  };
+  if (mirror !== undefined) payload.mirror = mirror;
+  return createEnvelope("trash-result", requestId, payload);
 }
 
 export async function handleRepairMirror(requestId: string): Promise<Envelope> {
-  return runTrashMutation(async () => {
-    const store = getStorage();
-    const current = await loadTrash(store);
-    if (!mirrorBridge) {
-      return createEnvelope("trash-result", requestId, {
-        ok: false,
-        action: "repair-mirror",
-        state: current,
-        error: "Mirror bridge unavailable",
-      });
-    }
-    const need = recordsNeedingRepair(current.items);
-    if (need.length === 0) {
-      return createEnvelope("trash-result", requestId, {
-        ok: true,
-        action: "repair-mirror",
-        state: current,
-        repaired: [],
-      });
-    }
-    const mirrored = await mirrorStageBatch(need, mirrorBridge);
-    const state = mergeMirrored(current, mirrored);
-    await saveTrash(store, state);
+  const outcome = await useCase.repairMirror();
+  if (!outcome.ok) {
     return createEnvelope("trash-result", requestId, {
-      ok: true,
+      ok: false,
       action: "repair-mirror",
-      state,
-      repaired: mirrored,
+      state: outcome.state,
+      error: outcome.error ?? "Mirror bridge unavailable",
     });
+  }
+  return createEnvelope("trash-result", requestId, {
+    ok: true,
+    action: "repair-mirror",
+    state: outcome.state,
+    repaired: outcome.repaired,
   });
 }
 

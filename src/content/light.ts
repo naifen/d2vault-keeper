@@ -23,9 +23,8 @@ import {
   type InventoryStatus,
 } from "../inventory/index.js";
 import {
-  createBrowserIdbTagHooks,
+  createBrowserIdbMirrorBridge,
   createDimBridge,
-  createMirrorBridgeFromHooks,
   defaultSearchLocator,
 } from "../dim-bridge/index.js";
 import { ensureBrowser } from "../shared/webext.js";
@@ -35,8 +34,8 @@ ensureBrowser();
 
 const idb = createBrowserIdbKeyval();
 const bridge = createDimBridge(document, defaultSearchLocator);
-const tagBridge = createMirrorBridgeFromHooks(
-  createBrowserIdbTagHooks(idb, () => browserLocalStorageGet(LAST_MEMBERSHIP_KEY)),
+const tagBridge = createBrowserIdbMirrorBridge(idb, () =>
+  browserLocalStorageGet(LAST_MEMBERSHIP_KEY),
 );
 
 function announcePresence(): void {

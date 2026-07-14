@@ -40,3 +40,14 @@ export {
   noLightMirrorResult,
   noLightFallback,
 } from "./protocol.js";
+
+export {
+  collectLightResponses,
+  relayToLight,
+  relayLightKind,
+  createLightRelay,
+  type DimTab,
+  type DimTabQuery,
+  type TabMessageSender,
+  type LightRelayPorts,
+} from "./light-relay.js";

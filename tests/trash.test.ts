@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   canStageDefault,
   emptyTrashState,
+  exclusionDenialReason,
+  filterExcludedRecommendations,
   loadTrash,
   parseTrash,
   saveTrash,
@@ -55,22 +57,74 @@ describe("exclusion rules", () => {
   it("allows legendary non-favorite", () => {
     expect(canStageDefault(legendary)).toBe(true);
     expect(stageDenialReason(legendary)).toBeNull();
+    expect(exclusionDenialReason(legendary)).toBeNull();
   });
 
   it("denies exotic", () => {
     expect(canStageDefault(exotic)).toBe(false);
     expect(stageDenialReason(exotic)).toBe("exotic");
+    expect(exclusionDenialReason(exotic)).toBe("exotic");
   });
 
   it("denies favorite tag", () => {
     expect(canStageDefault(favorite)).toBe(false);
     expect(stageDenialReason(favorite)).toBe("favorite");
+    expect(exclusionDenialReason(favorite)).toBe("favorite");
   });
 
   it("denies tierType Exotic without isExotic flag", () => {
     expect(stageDenialReason({ id: "x", itemHash: 1, name: "X", tierType: "Exotic" })).toBe(
       "exotic",
     );
+  });
+
+  it("filterExcludedRecommendations drops exotic/favorite via resolve", () => {
+    const recs = [
+      { id: "leg", itemHash: 1, name: "Trust" },
+      { id: "ex", itemHash: 2, name: "Hawk" },
+      { id: "fav", itemHash: 3, name: "Beloved" },
+      { id: "unknown", itemHash: 4, name: "Mystery" },
+    ];
+    const vault = new Map([
+      ["leg", { tierType: "Legendary" }],
+      ["ex", { tierType: "Exotic" }],
+      ["fav", { tag: "favorite", tierType: "Legendary" }],
+    ]);
+    const kept = filterExcludedRecommendations(recs, (id) => vault.get(id));
+    expect(kept.map((r) => r.id).sort()).toEqual(["leg", "unknown"]);
+  });
+
+  it("filterExcludedRecommendations uses fields on the rec itself", () => {
+    const kept = filterExcludedRecommendations([
+      { id: "a", itemHash: 1, name: "A", isExotic: true },
+      { id: "b", itemHash: 2, name: "B", tag: "favorite" },
+      { id: "c", itemHash: 3, name: "C", tierType: "Legendary" },
+    ]);
+    expect(kept.map((r) => r.id)).toEqual(["c"]);
+  });
+
+  it("vault resolve wins over model fields that would weaken exclusion", () => {
+    // Model claims safe; vault says Exotic / favorite — must still drop.
+    const recs = [
+      { id: "ex", itemHash: 1, name: "Hawk", isExotic: false, tierType: "Legendary" },
+      { id: "fav", itemHash: 2, name: "Beloved", tag: "keep", tierType: "Legendary" },
+      { id: "leg", itemHash: 3, name: "Trust", tierType: "Legendary" },
+    ];
+    const vault = new Map([
+      ["ex", { isExotic: true, tierType: "Exotic" }],
+      ["fav", { tag: "favorite", tierType: "Legendary" }],
+      ["leg", { tierType: "Legendary" }],
+    ]);
+    const kept = filterExcludedRecommendations(recs, (id) => vault.get(id));
+    expect(kept.map((r) => r.id)).toEqual(["leg"]);
+  });
+
+  it("isExotic-only vault row drops rec without tierType on the payload", () => {
+    const kept = filterExcludedRecommendations(
+      [{ id: "x", itemHash: 1, name: "ExoticGun" }],
+      (id) => (id === "x" ? { isExotic: true } : undefined),
+    );
+    expect(kept).toEqual([]);
   });
 });
 

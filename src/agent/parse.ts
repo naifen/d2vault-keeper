@@ -79,6 +79,10 @@ function normalizeRecs(raw: unknown): AgentRecommendation[] {
     if (!id || !name || !Number.isFinite(itemHash)) continue;
     const rec: AgentRecommendation = { id, itemHash, name };
     if (typeof e.reason === "string") rec.reason = e.reason;
+    // Preserve exclusion-relevant fields so post-parse filter can drop without vault.
+    if (typeof e.tierType === "string") rec.tierType = e.tierType;
+    if (typeof e.tag === "string") rec.tag = e.tag;
+    if (typeof e.isExotic === "boolean") rec.isExotic = e.isExotic;
     out.push(rec);
   }
   return out;
