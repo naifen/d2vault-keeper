@@ -276,6 +276,101 @@ describe("runAgent mocked HTTP", () => {
     });
     expect(result.recommendations.map((r) => r.id)).toEqual(["leg"]);
   });
+
+  it("exclusionById enforces without LLM dump (opt-in false, shipped intention→run)", async () => {
+    const request = intentionToAgentRequest({
+      intention: "junk",
+      vaultContextOptIn: false,
+      vaultItems: [
+        { id: "ex", itemHash: 2, name: "Hawk", isExotic: true },
+        { id: "fav", itemHash: 3, name: "Beloved", tag: "favorite", tierType: "Legendary" },
+        { id: "leg", itemHash: 1, name: "Trust", tierType: "Legendary" },
+      ],
+    });
+    expect(request.vaultSlice).toBeUndefined();
+    expect(request.exclusionById?.ex?.isExotic).toBe(true);
+
+    const fetchFn = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { messages: unknown[] };
+      // Exclusion index must never reach the model.
+      expect(JSON.stringify(body)).not.toContain("exclusionById");
+      expect(JSON.stringify(body)).not.toContain("Hawk");
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  filters: [],
+                  explanation: "x",
+                  recommendations: [
+                    { id: "ex", itemHash: 2, name: "Hawk" },
+                    { id: "fav", itemHash: 3, name: "Beloved" },
+                    { id: "leg", itemHash: 1, name: "Trust" },
+                  ],
+                }),
+              },
+            },
+          ],
+        }),
+      } as Response;
+    });
+
+    const result = await runAgent({
+      settings,
+      request,
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.recommendations.map((r) => r.id)).toEqual(["leg"]);
+  });
+
+  it("exclusionById covers ids outside LLM vaultSlice cap", async () => {
+    const vaultItems = Array.from({ length: 10 }, (_, i) => ({
+      id: `id-${i}`,
+      itemHash: i,
+      name: `Item ${i}`,
+      tierType: i === 9 ? "Exotic" : "Legendary",
+      isExotic: i === 9,
+    }));
+    const request = intentionToAgentRequest({
+      intention: "junk",
+      vaultContextOptIn: true,
+      vaultItems,
+      vaultSliceLimit: 3,
+    });
+    expect(request.vaultSlice).toHaveLength(3);
+    expect(request.exclusionById?.["id-9"]?.isExotic).toBe(true);
+
+    const fetchFn = vi.fn(async () => {
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  filters: [],
+                  explanation: "x",
+                  recommendations: [
+                    { id: "id-0", itemHash: 0, name: "Item 0" },
+                    { id: "id-9", itemHash: 9, name: "Item 9" },
+                  ],
+                }),
+              },
+            },
+          ],
+        }),
+      } as Response;
+    });
+
+    const result = await runAgent({
+      settings,
+      request,
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.recommendations.map((r) => r.id)).toEqual(["id-0"]);
+  });
 });
 
 describe("settings storage + redaction", () => {

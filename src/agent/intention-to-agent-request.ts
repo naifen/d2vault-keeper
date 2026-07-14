@@ -1,10 +1,14 @@
 /**
  * Product step: Intention → AgentRequest (vault opt-in + slice bound).
  * Pure policy — not Workbench DOM, not HTTP.
- * Preserves exclusion fields (isExotic, tierType, tag) for Agent post-filter.
+ * Exclusion index from full vault (not slice-capped); LLM dump only when opt-in.
  */
 
-import type { AgentRequest, AgentVaultSliceRow } from "./types.js";
+import type {
+  AgentExclusionFields,
+  AgentRequest,
+  AgentVaultSliceRow,
+} from "./types.js";
 
 export const DEFAULT_VAULT_SLICE_LIMIT = 200;
 
@@ -22,9 +26,37 @@ export interface VaultViewItem {
 export interface IntentionToAgentRequestInput {
   intention: string;
   vaultContextOptIn: boolean;
-  /** Full or partial vault view; only used when opt-in true. */
+  /**
+   * Vault view: always used for exclusionById when present.
+   * LLM vaultSlice only when vaultContextOptIn is true.
+   */
   vaultItems?: readonly VaultViewItem[];
   vaultSliceLimit?: number;
+}
+
+function toExclusionFields(v: VaultViewItem): AgentExclusionFields | undefined {
+  const fields: AgentExclusionFields = {};
+  if (v.tierType !== undefined) fields.tierType = v.tierType;
+  if (v.tag !== undefined) fields.tag = v.tag;
+  if (v.isExotic !== undefined) fields.isExotic = v.isExotic;
+  return fields.tierType !== undefined || fields.tag !== undefined || fields.isExotic !== undefined
+    ? fields
+    : undefined;
+}
+
+function buildExclusionById(
+  items: readonly VaultViewItem[],
+): Record<string, AgentExclusionFields> | undefined {
+  const map: Record<string, AgentExclusionFields> = {};
+  let any = false;
+  for (const v of items) {
+    const fields = toExclusionFields(v);
+    if (fields) {
+      map[v.id] = fields;
+      any = true;
+    }
+  }
+  return any ? map : undefined;
 }
 
 function toVaultSliceRow(v: VaultViewItem): AgentVaultSliceRow {
@@ -41,22 +73,24 @@ function toVaultSliceRow(v: VaultViewItem): AgentVaultSliceRow {
 
 /**
  * Intention + opt-in + vault view → AgentRequest.
- * When opt-in is false, vault slice is omitted regardless of vaultItems.
+ * - vaultContextOptIn false: no LLM vault dump; still attach exclusionById when vault known.
+ * - vaultContextOptIn true: bounded vaultSlice for the model + full exclusionById for filter.
  */
 export function intentionToAgentRequest(input: IntentionToAgentRequestInput): AgentRequest {
-  const limit = input.vaultSliceLimit ?? DEFAULT_VAULT_SLICE_LIMIT;
-  if (!input.vaultContextOptIn) {
-    return {
-      intention: input.intention,
-      vaultContextOptIn: false,
-    };
-  }
   const items = input.vaultItems ?? [];
-  const vaultSlice = items.slice(0, Math.max(0, limit)).map(toVaultSliceRow);
+  const exclusionById = buildExclusionById(items);
   const req: AgentRequest = {
     intention: input.intention,
-    vaultContextOptIn: true,
+    vaultContextOptIn: input.vaultContextOptIn,
   };
+  if (exclusionById) req.exclusionById = exclusionById;
+
+  if (!input.vaultContextOptIn) {
+    return req;
+  }
+
+  const limit = input.vaultSliceLimit ?? DEFAULT_VAULT_SLICE_LIMIT;
+  const vaultSlice = items.slice(0, Math.max(0, limit)).map(toVaultSliceRow);
   if (vaultSlice.length > 0) {
     req.vaultSlice = vaultSlice;
   }

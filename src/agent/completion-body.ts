@@ -16,7 +16,7 @@ export function agentMessages(req: AgentRequest): Array<{ role: string; content:
 
   let user = `Intention: ${req.intention}`;
   if (req.vaultContextOptIn && req.vaultSlice && req.vaultSlice.length > 0) {
-    // Bounded slice only — caller must not pass full vault without opt-in.
+    // Bounded slice only — never dump exclusionById (filter-only, not model context).
     user += `\nVault context (opt-in, ${req.vaultSlice.length} items):\n${JSON.stringify(req.vaultSlice)}`;
   } else {
     user += "\n(No vault dump; vaultContextOptIn is false.)";

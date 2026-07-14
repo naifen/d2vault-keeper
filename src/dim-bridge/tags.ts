@@ -9,22 +9,20 @@ import type { MirrorBridge } from "../mirror/index.js";
 export function createMessagingMirrorBridge(
   sendToLight: (kind: "mirror-set" | "mirror-clear", itemId: string) => Promise<boolean>,
 ): MirrorBridge {
+  async function call(
+    kind: "mirror-set" | "mirror-clear",
+    itemId: string,
+  ): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const ok = await sendToLight(kind, itemId);
+      return ok ? { ok: true } : { ok: false, error: `${kind} failed` };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
   return {
-    async setJunkTag(itemId) {
-      try {
-        const ok = await sendToLight("mirror-set", itemId);
-        return ok ? { ok: true } : { ok: false, error: "mirror-set failed" };
-      } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : String(err) };
-      }
-    },
-    async clearJunkTag(itemId) {
-      try {
-        const ok = await sendToLight("mirror-clear", itemId);
-        return ok ? { ok: true } : { ok: false, error: "mirror-clear failed" };
-      } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : String(err) };
-      }
-    },
+    setJunkTag: (itemId) => call("mirror-set", itemId),
+    clearJunkTag: (itemId) => call("mirror-clear", itemId),
   };
 }

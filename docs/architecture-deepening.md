@@ -42,5 +42,5 @@ Agent
 ## Residual risks
 
 - Live headed DIM QA remains manual (project standard). Automated bar: typecheck + tests + dual-target build.
-- Agent rec filtering without vault needs exclusion fields on the model payload (now preserved if present); Stage always enforces on Stage.
-- Vault resolve is authoritative over model fields for exclusion (`mergeExclusionSubject`); `isExotic` is kept on vault slice (Stage parity).
+- Agent post-filter uses full `exclusionById` from Workbench vault (not slice-capped; kept even when LLM vault dump is off). Without any vault items, model-supplied exclusion fields on recs are the only Agent-side signal; Stage still enforces on Stage.
+- Vault resolve is authoritative over model fields for exclusion (`mergeExclusionSubject`); `isExotic` is kept on vault slice + exclusion index (Stage parity).

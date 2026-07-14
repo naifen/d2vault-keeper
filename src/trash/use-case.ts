@@ -126,15 +126,14 @@ export function createStageMirrorUseCase(ports: StageMirrorPorts): StageMirrorUs
       return runMutation(async () => {
         const store = ports.getStorage();
         const current = await loadTrash(store);
-        const toRemove = current.items.filter((i) => ids.includes(i.id));
         const { state, removed } = unstageItems(current, ids);
         // Persist Trash removal first.
         await saveTrash(store, state);
 
         let mirror: MirrorClearSummary | undefined;
         const bridge = ports.getMirrorBridge();
-        if (bridge && toRemove.length > 0) {
-          mirror = await mirrorUnstageBatch(toRemove, bridge);
+        if (bridge && removed.length > 0) {
+          mirror = await mirrorUnstageBatch(removed, bridge);
         }
 
         const out: UnstageOutcome = { state, removed };

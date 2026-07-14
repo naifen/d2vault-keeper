@@ -7,7 +7,12 @@
 import { filterExcludedRecommendations } from "../trash/exclusions.js";
 import { completionBody } from "./completion-body.js";
 import { parseAgentResponse } from "./parse.js";
-import type { AgentRequest, AgentResult, AgentSettings } from "./types.js";
+import type {
+  AgentExclusionFields,
+  AgentRequest,
+  AgentResult,
+  AgentSettings,
+} from "./types.js";
 
 export type FetchFn = typeof fetch;
 
@@ -29,10 +34,14 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
     throw new Error("Intention is empty");
   }
 
-  // Safety: strip vault if opt-in false even if slice provided.
+  // Safety: strip LLM vault dump if opt-in false; keep exclusionById (not sent to model).
   const safeRequest: AgentRequest = request.vaultContextOptIn
     ? request
-    : { intention: request.intention, vaultContextOptIn: false };
+    : {
+        intention: request.intention,
+        vaultContextOptIn: false,
+        ...(request.exclusionById ? { exclusionById: request.exclusionById } : {}),
+      };
 
   const url = `${settings.baseUrl.replace(/\/$/, "")}/chat/completions`;
   const body = completionBody(settings, safeRequest);
@@ -60,16 +69,30 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
   const content = data.choices?.[0]?.message?.content ?? "";
   const parsed = parseAgentResponse(content);
 
-  // Enforce same Favorite/Exotic rules as Stage (prompt is advisory only).
-  const vaultById = new Map(
-    (safeRequest.vaultSlice ?? []).map((row) => [row.id, row] as const),
-  );
+  // Full exclusion index preferred; vaultSlice is fallback (tests / legacy callers).
+  const exclusionResolve = exclusionResolveFromRequest(safeRequest);
   return {
     ...parsed,
-    recommendations: filterExcludedRecommendations(parsed.recommendations, (id) =>
-      vaultById.get(id),
+    recommendations: filterExcludedRecommendations(
+      parsed.recommendations,
+      exclusionResolve,
     ),
   };
+}
+
+/** Resolve exclusion subject by item id for post-parse filter. */
+function exclusionResolveFromRequest(
+  request: AgentRequest,
+): ((id: string) => AgentExclusionFields | undefined) | undefined {
+  if (request.exclusionById) {
+    const map = request.exclusionById;
+    return (id) => map[id];
+  }
+  if (request.vaultSlice && request.vaultSlice.length > 0) {
+    const byId = new Map(request.vaultSlice.map((row) => [row.id, row] as const));
+    return (id) => byId.get(id);
+  }
+  return undefined;
 }
 
 export function createAgentController(): {

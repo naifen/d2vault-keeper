@@ -4,6 +4,7 @@ export type {
   AgentResult,
   AgentRecommendation,
   AgentVaultSliceRow,
+  AgentExclusionFields,
 } from "./types.js";
 export {
   AGENT_SETTINGS_KEY,
