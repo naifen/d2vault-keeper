@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PROTOTYPE — Workbench UI variants</title>
+    <!--
+      PROTOTYPE (throwaway): Three structural variants of the Workbench shell.
+      Question: "What should the Workbench look/feel like for Intention → DIM filter → Stage → Trash?"
+      Verdict (2026-07-14): C wins (composer-first). Also: Stage selected rewrites query to Selection filter; Results perk hover.
+      Switch: ?variant=A|B|C  or floating bar / arrow keys.
+      Run: npm run prototype:workbench
+      Do NOT ship. Do NOT promote this HTML into production Workbench without a rewrite.
+    -->
+    <style>
+      /* —— Prototype chrome (not product) —— */
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #1a1d24;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      }
+      .proto-stage {
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: stretch;
+        padding: 12px 12px 72px;
+        box-sizing: border-box;
+      }
+      .proto-frame {
+        width: 100%;
+        max-width: 360px;
+        min-height: calc(100vh - 84px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+        border-radius: 8px;
+        overflow: hidden;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+      }
+      .proto-switcher {
+        position: fixed;
+        left: 50%;
+        bottom: 14px;
+        transform: translateX(-50%);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        background: #f4f4f5;
+        color: #111;
+        border-radius: 999px;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+        font: 600 12px/1.2 system-ui, sans-serif;
+        user-select: none;
+      }
+      .proto-switcher button {
+        border: none;
+        background: #111;
+        color: #fff;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 16px;
+        line-height: 1;
+      }
+      .proto-switcher button:hover {
+        background: #333;
+      }
+      .proto-switcher .label {
+        min-width: 160px;
+        text-align: center;
+      }
+      .proto-switcher .hint {
+        display: none;
+      }
+      .proto-banner {
+        position: fixed;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 9998;
+        font: 600 11px/1 system-ui, sans-serif;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #fbbf24;
+        background: #422006;
+        border: 1px solid #b45309;
+        padding: 6px 10px;
+        border-radius: 4px;
+      }
+
+      /* —— Shared mock bits —— */
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+      }
+      .wb-root {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        position: relative;
+      }
+      .row-check {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 8px;
+        align-items: center;
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--row-border, #1a2130);
+        font-size: 12px;
+      }
+      .row-check:last-child {
+        border-bottom: none;
+      }
+      .row-meta {
+        color: var(--muted, #8b95a8);
+        font-variant-numeric: tabular-nums;
+        font-size: 11px;
+      }
+      .pill-btn {
+        border: 1px solid var(--border, #2a3344);
+        background: var(--btn-bg, #1e2636);
+        color: var(--text, #e6eaf0);
+        border-radius: 999px;
+        padding: 8px 14px;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .pill-btn:hover:not(:disabled) {
+        border-color: var(--accent, #c5a572);
+      }
+      .pill-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .pill-btn.primary {
+        background: linear-gradient(180deg, #3a4a2e 0%, #2a3522 100%);
+        border-color: #6b8f4e;
+        color: #d7f0c0;
+      }
+      .pill-btn.accent {
+        background: linear-gradient(180deg, #4a3f28 0%, #322a1a 100%);
+        border-color: var(--accent, #c5a572);
+        color: #f0e2c0;
+      }
+      .icon-btn {
+        border: 1px solid var(--border, #2a3344);
+        background: transparent;
+        color: var(--muted, #8b95a8);
+        border-radius: 4px;
+        width: 32px;
+        height: 32px;
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+      .icon-btn:hover {
+        color: var(--text, #e6eaf0);
+        border-color: var(--accent-dim, #8a7349);
+      }
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 20;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+      }
+      .scrim[hidden] {
+        display: none !important;
+      }
+      .chip-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        border: 1px solid var(--border, #2a3344);
+        background: transparent;
+        color: var(--muted, #8b95a8);
+        border-radius: 4px;
+        padding: 4px 10px;
+        font: inherit;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .chip[aria-selected="true"] {
+        color: var(--accent, #c5a572);
+        border-color: var(--accent-dim, #8a7349);
+        background: rgba(197, 165, 114, 0.08);
+      }
+      .status-line {
+        font-size: 11px;
+        color: var(--muted, #8b95a8);
+        min-height: 1.2em;
+      }
+      .status-line.ok {
+        color: #5cb87a;
+      }
+      .status-line.err {
+        color: #d35f5f;
+      }
+      .empty {
+        padding: 16px 8px;
+        text-align: center;
+        color: var(--muted, #8b95a8);
+        font-size: 12px;
+      }
+
+      /* ========== VARIANT A — Canonical freeze (ADR) ========== */
+      .va {
+        --bg: #0d111a;
+        --bg-elevated: #151b28;
+        --border: #2a3344;
+        --text: #e6eaf0;
+        --muted: #8b95a8;
+        --accent: #c5a572;
+        --accent-dim: #8a7349;
+        --deep: #0a0e16;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      .va-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 12px 8px;
+        border-bottom: 1px solid var(--border);
+      }
+      .va-header h1 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 650;
+        color: var(--accent);
+        letter-spacing: 0.04em;
+      }
+      .va-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 0;
+      }
+      .va-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px;
+      }
+      .va-card-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--accent-dim);
+      }
+      .va-query {
+        width: 100%;
+        box-sizing: border-box;
+        background: var(--deep);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+        padding: 8px;
+        font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+        resize: vertical;
+        min-height: 56px;
+      }
+      .va-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .va-actions .pill-btn {
+        flex: 1;
+        min-width: 0;
+      }
+      .va-results-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .va-list {
+        max-height: 160px;
+        overflow-y: auto;
+        background: var(--deep);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+      }
+      .va-explain {
+        font-size: 12px;
+        color: var(--muted);
+        margin: 0;
+      }
+      .va-composer {
+        border-top: 1px solid var(--border);
+        background: var(--bg-elevated);
+        padding: 10px 12px 12px;
+        flex-shrink: 0;
+      }
+      .va-composer label {
+        display: block;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--accent-dim);
+        margin-bottom: 6px;
+      }
+      .va-composer textarea {
+        width: 100%;
+        box-sizing: border-box;
+        background: var(--deep);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+        padding: 8px;
+        font: inherit;
+        resize: none;
+        min-height: 64px;
+      }
+      .va-composer textarea:focus,
+      .va-query:focus {
+        outline: 1px solid var(--accent-dim);
+        border-color: var(--accent-dim);
+      }
+      .va-sheet {
+        width: 100%;
+        max-height: 72%;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-bottom: none;
+        border-radius: 10px 10px 0 0;
+        padding: 12px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .va-sheet h2 {
+        margin: 0;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--accent);
+      }
+      .va-sheet .help {
+        margin: 0;
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      /* ========== VARIANT B — Command rail + full Results ========== */
+      .vb {
+        --bg: #0a0c10;
+        --bg-elevated: #12161f;
+        --border: #2c3548;
+        --text: #eef1f6;
+        --muted: #7d8799;
+        --accent: #d4af6a;
+        --accent-dim: #9a7b42;
+        --deep: #07090d;
+        --rail: #0e1218;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 13px;
+        flex-direction: row !important;
+      }
+      .vb-rail {
+        width: 48px;
+        flex-shrink: 0;
+        background: var(--rail);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 0;
+      }
+      .vb-rail button {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .vb-rail button:hover,
+      .vb-rail button[aria-pressed="true"] {
+        color: var(--accent);
+        border-color: var(--accent-dim);
+        background: rgba(212, 175, 106, 0.08);
+      }
+      .vb-main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .vb-top {
+        padding: 10px 10px 8px;
+        border-bottom: 1px solid var(--border);
+      }
+      .vb-top h1 {
+        margin: 0 0 8px;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent-dim);
+        font-weight: 600;
+      }
+      .vb-query-row {
+        display: flex;
+        gap: 6px;
+        align-items: stretch;
+      }
+      .vb-query {
+        flex: 1;
+        min-width: 0;
+        background: var(--deep);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+        padding: 8px;
+        font: 11px/1.35 ui-monospace, Menlo, monospace;
+        resize: none;
+        min-height: 48px;
+      }
+      .vb-results {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 8px 10px;
+        gap: 8px;
+      }
+      .vb-list {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--deep);
+      }
+      .vb-composer {
+        border-top: 1px solid var(--border);
+        padding: 8px 10px 10px;
+        background: var(--bg-elevated);
+      }
+      .vb-composer textarea {
+        width: 100%;
+        box-sizing: border-box;
+        background: var(--deep);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        padding: 10px;
+        font: inherit;
+        resize: none;
+        min-height: 56px;
+      }
+      .vb-drawer {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: min(100%, 280px);
+        background: var(--bg-elevated);
+        border-left: 1px solid var(--border);
+        z-index: 25;
+        display: flex;
+        flex-direction: column;
+        padding: 12px;
+        box-sizing: border-box;
+        gap: 8px;
+      }
+      .vb-drawer[hidden] {
+        display: none !important;
+      }
+      .vb-drawer h2 {
+        margin: 0;
+        font-size: 13px;
+        color: var(--accent);
+      }
+      .vb-settings {
+        position: absolute;
+        inset: 0;
+        z-index: 30;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+      }
+      .vb-settings[hidden] {
+        display: none !important;
+      }
+      .vb-settings-panel {
+        width: 100%;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 14px;
+      }
+      .vb-settings-panel h2 {
+        margin: 0 0 10px;
+        font-size: 13px;
+        color: var(--accent);
+      }
+      .vb-settings-panel label {
+        display: block;
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+      .vb-settings-panel input {
+        width: 100%;
+        box-sizing: border-box;
+        margin-bottom: 10px;
+        background: var(--deep);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+        padding: 8px;
+        font: inherit;
+      }
+
+      /* ========== VARIANT C — Composer-first + peek Trash ========== */
+      .vc {
+        --bg: #10141c;
+        --bg-elevated: #181e2a;
+        --border: #313b4f;
+        --text: #e8ecf4;
+        --muted: #9099ab;
+        --accent: #c9a35a;
+        --accent-dim: #8f7340;
+        --deep: #0b0e14;
+        --ok: #5cb87a;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 13px;
+      }
+      .vc-header {
+        padding: 14px 14px 6px;
+      }
+      .vc-header h1 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--text);
+      }
+      .vc-header p {
+        margin: 4px 0 0;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .vc-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 8px 14px 100px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 0;
+      }
+      .vc-intention {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+      }
+      .vc-intention textarea {
+        width: 100%;
+        box-sizing: border-box;
+        border: none;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        resize: none;
+        min-height: 72px;
+        padding: 0;
+      }
+      .vc-intention textarea:focus {
+        outline: none;
+      }
+      .vc-suggest {
+        width: 100%;
+        margin-top: 10px;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid var(--accent-dim);
+        background: linear-gradient(180deg, #3d3420, #2a2416);
+        color: #f5e6c4;
+        font: inherit;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .vc-suggest:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .vc-query-block h2,
+      .vc-results-block h2 {
+        margin: 0 0 6px;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--accent-dim);
+      }
+      .vc-query {
+        width: 100%;
+        box-sizing: border-box;
+        background: var(--deep);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        padding: 10px;
+        font: 12px/1.4 ui-monospace, Menlo, monospace;
+        min-height: 64px;
+        resize: vertical;
+      }
+      .vc-toolrow {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .vc-toolrow .pill-btn {
+        flex: 1;
+      }
+      .vc-list {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--deep);
+        max-height: 200px;
+        overflow-y: auto;
+      }
+      .vc-peek {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 15;
+        background: var(--bg-elevated);
+        border-top: 1px solid var(--border);
+        box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+        transition: max-height 0.2s ease;
+        max-height: 48px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .vc-peek.expanded {
+        max-height: 55%;
+      }
+      .vc-peek-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        cursor: pointer;
+        flex-shrink: 0;
+        background: transparent;
+        border: none;
+        color: inherit;
+        font: inherit;
+        width: 100%;
+        text-align: left;
+      }
+      .vc-peek-bar strong {
+        color: var(--accent);
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .vc-peek-body {
+        padding: 0 14px 14px;
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+      }
+      .vc-gear {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="proto-banner">PROTOTYPE — not production Workbench</div>
+    <div class="proto-stage">
+      <div class="proto-frame" id="frame" aria-live="polite"></div>
+    </div>
+    <div class="proto-switcher" role="toolbar" aria-label="Prototype variant switcher">
+      <button type="button" id="prev" aria-label="Previous variant">←</button>
+      <div class="label" id="switch-label">A — Canonical</div>
+      <button type="button" id="next" aria-label="Next variant">→</button>
+    </div>
+
+    <script type="module">
+      /**
+       * PROTOTYPE mock state only — in-memory, no messaging / extension APIs.
+       */
+      const VARIANTS = [
+        { key: "A", name: "Canonical freeze" },
+        { key: "B", name: "Command rail" },
+        { key: "C", name: "Composer-first" },
+      ];
+
+      const mock = {
+        hasApiKey: true,
+        query:
+          'is:handcannon -is:exotic -perkname:"slideshot" -masterwork:range',
+        intention:
+          "I want to find all hand cannons without slideshot and range masterwork",
+        explanation:
+          "Legendary hand cannons missing Slideshot and without range MW. Exotics excluded.",
+        matches: [
+          { id: "1", name: "Austringer", meta: "Legendary · ⚡1810" },
+          { id: "2", name: "Fatebringer", meta: "Legendary · ⚡1805" },
+          { id: "3", name: "Palindrome", meta: "Legendary · ⚡1790" },
+          { id: "4", name: "Igneous Hammer", meta: "Legendary · ⚡1812" },
+        ],
+        recs: [
+          { id: "2", name: "Fatebringer", meta: "no slideshot" },
+          { id: "4", name: "Igneous Hammer", meta: "range MW missing" },
+        ],
+        trash: [
+          { id: "9", name: "True Prophecy", mirror: "ok" },
+          { id: "10", name: "Dire Promise", mirror: "pending" },
+        ],
+        selected: new Set(),
+        resultsTab: "matches",
+        resultsOpen: true,
+        trashOpen: false,
+        settingsOpen: false,
+        status: "Agent done — 1 filter, 2 recs. Stage is manual.",
+        statusKind: "ok",
+      };
+
+      function getVariant() {
+        const v = new URLSearchParams(location.search).get("variant") || "A";
+        return VARIANTS.some((x) => x.key === v) ? v : "A";
+      }
+
+      function setVariant(key) {
+        const url = new URL(location.href);
+        url.searchParams.set("variant", key);
+        history.replaceState(null, "", url);
+        render();
+      }
+
+      function cycle(delta) {
+        const i = VARIANTS.findIndex((v) => v.key === getVariant());
+        const next = VARIANTS[(i + delta + VARIANTS.length) % VARIANTS.length];
+        setVariant(next.key);
+      }
+
+      function esc(s) {
+        return String(s)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;");
+      }
+
+      function listRows(items, { showMirror = false } = {}) {
+        if (!items.length) return `<div class="empty">No items</div>`;
+        return items
+          .map((it) => {
+            const checked = mock.selected.has(it.id) ? "checked" : "";
+            const meta = showMirror
+              ? `mirror:${it.mirror}`
+              : it.meta || "";
+            return `<label class="row-check">
+              <input type="checkbox" data-id="${esc(it.id)}" ${checked} />
+              <span>${esc(it.name)}</span>
+              <span class="row-meta">${esc(meta)}</span>
+            </label>`;
+          })
+          .join("");
+      }
+
+      function renderA() {
+        const tab = mock.resultsTab;
+        const items = tab === "recs" ? mock.recs : mock.matches;
+        const resultsBody = mock.resultsOpen
+          ? `<div class="chip-row" style="margin-bottom:8px">
+               <button type="button" class="chip" data-act="tab-matches" aria-selected="${tab === "matches"}">Matches</button>
+               <button type="button" class="chip" data-act="tab-recs" aria-selected="${tab === "recs"}">Recs</button>
+               <button type="button" class="pill-btn" data-act="stage" style="margin-left:auto;border-radius:4px;padding:4px 10px">Stage selected</button>
+             </div>
+             <div class="va-list">${listRows(items)}</div>`
+          : `<div class="empty">Results collapsed — Suggest or load matches to expand</div>`;
+
+        return `
+          <div class="wb-root va">
+            <header class="va-header">
+              <h1>Vault Keeper</h1>
+              <button type="button" class="icon-btn" data-act="settings" title="Settings" aria-label="Settings">⚙</button>
+            </header>
+            <div class="va-body">
+              <section class="va-card">
+                <div class="va-card-label">
+                  <span>DIM filter</span>
+                  <button type="button" class="icon-btn" data-act="copy" title="Copy" aria-label="Copy filter">⎘</button>
+                </div>
+                <textarea class="va-query" data-field="query" spellcheck="false">${esc(mock.query)}</textarea>
+              </section>
+              <div class="va-actions">
+                <button type="button" class="pill-btn accent" data-act="suggest" ${mock.hasApiKey ? "" : "disabled"}>Suggest</button>
+                <button type="button" class="pill-btn primary" data-act="apply">Apply</button>
+                <button type="button" class="pill-btn" data-act="trash">Trash</button>
+              </div>
+              <p class="status-line ${esc(mock.statusKind)}" data-status>${esc(mock.status)}</p>
+              <section class="va-card">
+                <div class="va-results-head">
+                  <strong style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-dim)">Results</strong>
+                  <button type="button" class="chip" data-act="toggle-results">${mock.resultsOpen ? "Collapse" : "Expand"}</button>
+                </div>
+                ${resultsBody}
+              </section>
+              <p class="va-explain">${esc(mock.explanation)}</p>
+            </div>
+            <div class="va-composer">
+              <label for="va-intention">Intention</label>
+              <textarea id="va-intention" data-field="intention" rows="3">${esc(mock.intention)}</textarea>
+            </div>
+            <div class="scrim" data-scrim="trash" ${mock.trashOpen ? "" : "hidden"}>
+              <div class="va-sheet" role="dialog" aria-label="Trash">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <h2>Trash</h2>
+                  <button type="button" class="icon-btn" data-act="trash" aria-label="Close">✕</button>
+                </div>
+                <p class="help">Staged for in-game dismantle. Vault Keeper never deletes items from Destiny.</p>
+                <div class="va-list" style="max-height:180px">${listRows(mock.trash, { showMirror: true })}</div>
+                <div class="va-actions">
+                  <button type="button" class="pill-btn" data-act="unstage">Unstage selected</button>
+                  <button type="button" class="pill-btn" data-act="repair">Repair Mirror</button>
+                </div>
+              </div>
+            </div>
+            <div class="scrim" data-scrim="settings" ${mock.settingsOpen ? "" : "hidden"}>
+              <div class="va-sheet" role="dialog" aria-label="Settings" style="max-height:60%">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <h2>Settings</h2>
+                  <button type="button" class="icon-btn" data-act="settings" aria-label="Close">✕</button>
+                </div>
+                <label class="help" for="va-key">OpenRouter-compatible API key</label>
+                <input id="va-key" type="password" placeholder="sk-or-…" style="width:100%;box-sizing:border-box;margin:6px 0 10px;padding:8px;background:var(--deep);border:1px solid var(--border);border-radius:4px;color:var(--text)" />
+                <label class="help" style="display:flex;gap:8px;align-items:flex-start">
+                  <input type="checkbox" /> Opt in: send vault slice to agent
+                </label>
+                <button type="button" class="pill-btn primary" style="margin-top:10px" data-act="save-key">Save key</button>
+              </div>
+            </div>
+          </div>`;
+      }
+
+      function renderB() {
+        const tab = mock.resultsTab;
+        const items = tab === "recs" ? mock.recs : mock.matches;
+        return `
+          <div class="wb-root vb">
+            <nav class="vb-rail" aria-label="Commands">
+              <button type="button" data-act="suggest" title="Suggest" aria-label="Suggest" ${mock.hasApiKey ? "" : "disabled"}>✦</button>
+              <button type="button" data-act="apply" title="Apply" aria-label="Apply">→</button>
+              <button type="button" data-act="trash" title="Trash" aria-label="Trash" aria-pressed="${mock.trashOpen}">🗑</button>
+              <div style="flex:1"></div>
+              <button type="button" data-act="settings" title="Settings" aria-label="Settings">⚙</button>
+            </nav>
+            <div class="vb-main">
+              <div class="vb-top">
+                <h1>Vault Keeper</h1>
+                <div class="vb-query-row">
+                  <textarea class="vb-query" data-field="query" spellcheck="false">${esc(mock.query)}</textarea>
+                  <button type="button" class="icon-btn" data-act="copy" title="Copy">⎘</button>
+                </div>
+                <p class="status-line ${esc(mock.statusKind)}" style="margin:6px 0 0">${esc(mock.status)}</p>
+              </div>
+              <div class="vb-results">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div class="chip-row">
+                    <button type="button" class="chip" data-act="tab-matches" aria-selected="${tab === "matches"}">Matches</button>
+                    <button type="button" class="chip" data-act="tab-recs" aria-selected="${tab === "recs"}">Recs</button>
+                  </div>
+                  <button type="button" class="pill-btn" data-act="stage" style="margin-left:auto;padding:4px 10px;border-radius:4px">Stage</button>
+                </div>
+                <div class="vb-list">${listRows(items)}</div>
+                <p class="status-line" style="margin:0">${esc(mock.explanation)}</p>
+              </div>
+              <div class="vb-composer">
+                <textarea data-field="intention" rows="2" placeholder="Intention…">${esc(mock.intention)}</textarea>
+              </div>
+            </div>
+            <div class="vb-drawer" ${mock.trashOpen ? "" : "hidden"} role="dialog" aria-label="Trash">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <h2>Trash · ${mock.trash.length}</h2>
+                <button type="button" class="icon-btn" data-act="trash">✕</button>
+              </div>
+              <p class="status-line">Not deleted from Destiny. Unstage or Repair inside.</p>
+              <div class="vb-list" style="flex:1">${listRows(mock.trash, { showMirror: true })}</div>
+              <div style="display:flex;gap:8px">
+                <button type="button" class="pill-btn" data-act="unstage">Unstage</button>
+                <button type="button" class="pill-btn" data-act="repair">Repair</button>
+              </div>
+            </div>
+            <div class="vb-settings" ${mock.settingsOpen ? "" : "hidden"}>
+              <div class="vb-settings-panel" role="dialog" aria-label="Settings">
+                <h2>Settings</h2>
+                <label for="vb-key">API key</label>
+                <input id="vb-key" type="password" placeholder="sk-or-…" />
+                <label style="display:flex;gap:8px;align-items:center;color:var(--text);margin-bottom:12px">
+                  <input type="checkbox" /> Vault opt-in for agent
+                </label>
+                <div style="display:flex;gap:8px">
+                  <button type="button" class="pill-btn primary" data-act="save-key">Save</button>
+                  <button type="button" class="pill-btn" data-act="settings">Close</button>
+                </div>
+              </div>
+            </div>
+          </div>`;
+      }
+
+      function renderC() {
+        const tab = mock.resultsTab;
+        const items = tab === "recs" ? mock.recs : mock.matches;
+        return `
+          <div class="wb-root vc">
+            <header class="vc-header">
+              <h1>Vault Keeper</h1>
+              <p>Stage for in-game dismantle — never deletes Destiny items.</p>
+              <button type="button" class="icon-btn vc-gear" data-act="settings" aria-label="Settings">⚙</button>
+            </header>
+            <div class="vc-scroll">
+              <section class="vc-intention">
+                <textarea data-field="intention" rows="3">${esc(mock.intention)}</textarea>
+                <button type="button" class="vc-suggest" data-act="suggest" ${mock.hasApiKey ? "" : "disabled"}>Suggest</button>
+                <p class="status-line ${esc(mock.statusKind)}" style="margin:8px 0 0">${esc(mock.status)}</p>
+              </section>
+              <section class="vc-query-block">
+                <h2>DIM filter</h2>
+                <textarea class="vc-query" data-field="query" spellcheck="false">${esc(mock.query)}</textarea>
+                <div class="vc-toolrow">
+                  <button type="button" class="pill-btn" data-act="copy">Copy</button>
+                  <button type="button" class="pill-btn primary" data-act="apply">Apply to DIM</button>
+                </div>
+              </section>
+              <section class="vc-results-block">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                  <h2 style="margin:0">Results</h2>
+                  <div class="chip-row" style="margin-left:auto">
+                    <button type="button" class="chip" data-act="tab-matches" aria-selected="${tab === "matches"}">Matches</button>
+                    <button type="button" class="chip" data-act="tab-recs" aria-selected="${tab === "recs"}">Recs</button>
+                  </div>
+                </div>
+                <div class="vc-list">${listRows(items)}</div>
+                <button type="button" class="pill-btn" data-act="stage" style="width:100%;margin-top:8px">Stage selected</button>
+                <p class="status-line" style="margin:8px 0 0">${esc(mock.explanation)}</p>
+              </section>
+            </div>
+            <div class="vc-peek ${mock.trashOpen ? "expanded" : ""}">
+              <button type="button" class="vc-peek-bar" data-act="trash">
+                <strong>Trash · ${mock.trash.length}</strong>
+                <span class="row-meta">${mock.trashOpen ? "Collapse" : "Expand"}</span>
+              </button>
+              <div class="vc-peek-body">
+                <p class="status-line">Staged for in-game dismantle — not deleted.</p>
+                <div class="vc-list">${listRows(mock.trash, { showMirror: true })}</div>
+                <div class="vc-toolrow" style="margin-top:8px">
+                  <button type="button" class="pill-btn" data-act="unstage">Unstage</button>
+                  <button type="button" class="pill-btn" data-act="repair">Repair Mirror</button>
+                </div>
+              </div>
+            </div>
+            <div class="scrim" data-scrim="settings" ${mock.settingsOpen ? "" : "hidden"} style="position:absolute">
+              <div class="va-sheet" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:14px;width:100%;max-width:320px;margin:auto" role="dialog">
+                <div style="display:flex;justify-content:space-between">
+                  <strong style="color:var(--accent)">Settings</strong>
+                  <button type="button" class="icon-btn" data-act="settings">✕</button>
+                </div>
+                <label class="status-line" style="display:block;margin-top:10px">API key</label>
+                <input type="password" placeholder="sk-or-…" style="width:100%;box-sizing:border-box;margin:6px 0;padding:8px;background:var(--deep);border:1px solid var(--border);border-radius:4px;color:var(--text)" />
+                <label class="status-line" style="display:flex;gap:8px;margin:8px 0"><input type="checkbox" /> Vault opt-in</label>
+                <button type="button" class="pill-btn primary" data-act="save-key">Save</button>
+              </div>
+            </div>
+          </div>`;
+      }
+
+      function render() {
+        const key = getVariant();
+        const meta = VARIANTS.find((v) => v.key === key);
+        document.getElementById("switch-label").textContent = `${key} — ${meta.name}`;
+        const frame = document.getElementById("frame");
+        frame.innerHTML =
+          key === "A" ? renderA() : key === "B" ? renderB() : renderC();
+        wire(frame);
+        // Surface state for prototype inspection
+        console.info("[prototype state]", {
+          variant: key,
+          resultsTab: mock.resultsTab,
+          resultsOpen: mock.resultsOpen,
+          trashOpen: mock.trashOpen,
+          settingsOpen: mock.settingsOpen,
+          selected: [...mock.selected],
+          status: mock.status,
+        });
+      }
+
+      function wire(root) {
+        root.querySelectorAll("[data-field]").forEach((el) => {
+          el.addEventListener("input", () => {
+            mock[el.getAttribute("data-field")] = el.value;
+          });
+          el.addEventListener("keydown", (e) => {
+            if (
+              el.getAttribute("data-field") === "intention" &&
+              e.key === "Enter" &&
+              !e.shiftKey
+            ) {
+              e.preventDefault();
+              mock.status = "Suggest (mock) — filled query + opened Recs";
+              mock.statusKind = "ok";
+              mock.resultsOpen = true;
+              mock.resultsTab = "recs";
+              render();
+            }
+          });
+        });
+        root.querySelectorAll("[data-id]").forEach((el) => {
+          el.addEventListener("change", () => {
+            const id = el.getAttribute("data-id");
+            if (el.checked) mock.selected.add(id);
+            else mock.selected.delete(id);
+          });
+        });
+        root.querySelectorAll("[data-act]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const act = btn.getAttribute("data-act");
+            if (act === "suggest") {
+              mock.status = "Suggest (mock) — query + explanation; Recs open";
+              mock.statusKind = "ok";
+              mock.resultsOpen = true;
+              mock.resultsTab = "recs";
+            } else if (act === "apply") {
+              mock.status = "Apply (mock) — wrote filter to DIM";
+              mock.statusKind = "ok";
+            } else if (act === "copy") {
+              mock.status = "Copy (mock) — filter on clipboard";
+              mock.statusKind = "ok";
+            } else if (act === "trash") {
+              mock.trashOpen = !mock.trashOpen;
+              mock.settingsOpen = false;
+            } else if (act === "settings") {
+              mock.settingsOpen = !mock.settingsOpen;
+              if (mock.settingsOpen) mock.trashOpen = false;
+            } else if (act === "toggle-results") {
+              mock.resultsOpen = !mock.resultsOpen;
+            } else if (act === "tab-matches") {
+              mock.resultsTab = "matches";
+              mock.resultsOpen = true;
+            } else if (act === "tab-recs") {
+              mock.resultsTab = "recs";
+              mock.resultsOpen = true;
+            } else if (act === "stage") {
+              mock.status = `Stage (mock) — ${mock.selected.size || 0} selected (manual)`;
+              mock.statusKind = mock.selected.size ? "ok" : "err";
+            } else if (act === "unstage") {
+              mock.status = "Unstage (mock)";
+              mock.statusKind = "ok";
+            } else if (act === "repair") {
+              mock.status = "Repair Mirror (mock)";
+              mock.statusKind = "ok";
+            } else if (act === "save-key") {
+              mock.hasApiKey = true;
+              mock.settingsOpen = false;
+              mock.status = "API key saved (mock)";
+              mock.statusKind = "ok";
+            }
+            render();
+          });
+        });
+        root.querySelectorAll("[data-scrim]").forEach((scrim) => {
+          scrim.addEventListener("click", (e) => {
+            if (e.target === scrim) {
+              if (scrim.getAttribute("data-scrim") === "trash") mock.trashOpen = false;
+              if (scrim.getAttribute("data-scrim") === "settings") mock.settingsOpen = false;
+              render();
+            }
+          });
+        });
+      }
+
+      document.getElementById("prev").addEventListener("click", () => cycle(-1));
+      document.getElementById("next").addEventListener("click", () => cycle(1));
+      window.addEventListener("keydown", (e) => {
+        const t = e.target;
+        const typing =
+          t &&
+          (t.tagName === "INPUT" ||
+            t.tagName === "TEXTAREA" ||
+            t.isContentEditable);
+        if (typing) return;
+        if (e.key === "ArrowLeft") cycle(-1);
+        if (e.key === "ArrowRight") cycle(1);
+      });
+
+      if (!new URLSearchParams(location.search).get("variant")) {
+        const url = new URL(location.href);
+        url.searchParams.set("variant", "A");
+        history.replaceState(null, "", url);
+      }
+      render();
+    </script>
+  </body>
+</html>

@@ -21,20 +21,36 @@ Minimal on-page chip/badge on DIM. Does not open the Workbench (browser user-ges
 _Avoid_: floating action button (unless that form is chosen)
 
 **Workbench**:
-Full side-panel UI: Intention, filters, results, Trash.
-_Avoid_: popup, options page
+Full side surface UI in composer-first order: Intention + Suggest, then DIM filter, Results, and Trash (Trash as peek/expand panel on the Workbench, not a separate browser window).
+_Avoid_: popup, options page, DIM plugin UI
 
 **Intention**:
-Natural-language instruction for find/stage (e.g. handcannons missing certain perks).
+Natural-language instruction for find/stage (e.g. handcannons missing certain perks). Primary text entry near the top of the Workbench (composer-first).
 _Avoid_: prompt, query (unqualified)
+
+**Selection filter**:
+A DIM filter string built from the Guardian's explicit multi-select in Results so the query card matches exactly those Vault items (typically instance `id:` terms). Written when Stage selected runs; does not replace Stage itself.
+_Avoid_: auto filter, magic query
+
+**Suggest**:
+Workbench control that runs the Agent loop from the current Intention. Never Stages or Applies by itself.
+_Avoid_: run chatbot, auto-clean, dismantle
+
+**Apply**:
+Workbench control that writes the current DIM filter string into the open DIM session search.
+_Avoid_: execute query, run search (unqualified)
 
 **Agent loop**:
 LLM multi-step that turns Intention into draft DIM filter(s), explanation, and optional Stage recommendations. Never auto-Stages.
 _Avoid_: chatbot, autonomous cleaner
 
 **DIM filter**:
-A string in DIM's native inventory search language, applied via DIM search (DOM/Redux).
+A string in DIM's native inventory search language, applied via DIM search (DOM/Redux) or copied for paste.
 _Avoid_: SQL, Lucene query
+
+**Results**:
+Workbench list of Vault items under consideration, with two views: Matches (cached vault hits for the current DIM filter) and Recs (agent Stage recommendations). Stage is always explicit multi-select.
+_Avoid_: search results (ambiguous with DIM), dismantle list
 
 **Stage**:
 Add a Vault item to Trash without confirmation modal. Not game deletion.

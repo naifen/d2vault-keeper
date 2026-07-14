@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "package": "npm run build && node scripts/package.mjs"
+    "package": "npm run build && node scripts/package.mjs",
+    "prototype:workbench": "node scripts/serve-workbench-prototype.mjs"
   },
   "engines": {
     "node": ">=24"
