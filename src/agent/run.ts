@@ -1,8 +1,10 @@
 /**
  * Cancelable Agent loop over OpenRouter-compatible HTTP.
  * API key never logged.
+ * Post-parse: Favorite/Exotic exclusion drops violating recommendations (shared policy).
  */
 
+import { filterExcludedRecommendations } from "../trash/exclusions.js";
 import { buildCompletionBody } from "./build-request.js";
 import { parseAgentResponse } from "./parse.js";
 import type { AgentRequest, AgentResult, AgentSettings } from "./types.js";
@@ -56,7 +58,18 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
     choices?: Array<{ message?: { content?: string } }>;
   };
   const content = data.choices?.[0]?.message?.content ?? "";
-  return parseAgentResponse(content);
+  const parsed = parseAgentResponse(content);
+
+  // Enforce same Favorite/Exotic rules as Stage (prompt is advisory only).
+  const vaultById = new Map(
+    (safeRequest.vaultSlice ?? []).map((row) => [row.id, row] as const),
+  );
+  return {
+    ...parsed,
+    recommendations: filterExcludedRecommendations(parsed.recommendations, (id) =>
+      vaultById.get(id),
+    ),
+  };
 }
 
 export function createAgentController(): {

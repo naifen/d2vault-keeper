@@ -145,6 +145,47 @@ describe("runAgent mocked HTTP", () => {
     });
     expect(body.model).toBe("test-model");
   });
+
+  it("post-parse drops exotic/favorite recs using vault slice (shared exclusion)", async () => {
+    const fetchFn = vi.fn(async () => {
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  filters: ["is:weapon"],
+                  explanation: "model ignored rules",
+                  recommendations: [
+                    { id: "leg", itemHash: 1, name: "Trust" },
+                    { id: "ex", itemHash: 2, name: "Hawkmoon" },
+                    { id: "fav", itemHash: 3, name: "Beloved" },
+                  ],
+                }),
+              },
+            },
+          ],
+        }),
+      } as Response;
+    });
+
+    const result = await runAgent({
+      settings,
+      request: {
+        intention: "junk",
+        vaultContextOptIn: true,
+        vaultSlice: [
+          { id: "leg", itemHash: 1, name: "Trust", tierType: "Legendary" },
+          { id: "ex", itemHash: 2, name: "Hawkmoon", tierType: "Exotic" },
+          { id: "fav", itemHash: 3, name: "Beloved", tag: "favorite", tierType: "Legendary" },
+        ],
+      },
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.recommendations.map((r) => r.id)).toEqual(["leg"]);
+    expect(result.filters).toEqual(["is:weapon"]);
+  });
 });
 
 describe("settings storage + redaction", () => {

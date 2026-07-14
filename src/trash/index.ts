@@ -9,9 +9,12 @@ export type {
 export { TRASH_STORAGE_KEY } from "./types.js";
 export {
   canStageDefault,
+  exclusionDenialReason,
+  filterExcludedRecommendations,
   isExoticItem,
   isFavoriteTagged,
   stageDenialReason,
+  type ExclusionSubject,
 } from "./exclusions.js";
 export { emptyTrashState, parseTrash, serializeTrash } from "./serializer.js";
 export {
