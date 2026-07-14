@@ -2,13 +2,13 @@
 
 ## Problem Statement
 
-Identity + exclusion fields re-projected at every hop. Domain Stage map lives under workbench (`stage-map.ts`); agent has parallel pick helpers in `intention-to-agent-request`. Domain tests import workbench solely for Stage map.
+Identity + exclusion fields re-projected at every hop. Domain Stage map and agent pick helpers consolidated in `inventory/project.ts`.
 
 ## Goals
 
 1. One pure projection module beside inventory/trash (not UI).
 2. Callers take StageCandidate / Agent slice / ExclusionSubject shapes from there.
-3. Fold or re-export `stage-map`; agent uses shared exclusion/identity projection.
+3. Delete workbench `stage-map`; agent uses shared exclusion/identity projection.
 4. Tests (enrichment-stage) stop importing workbench for Stage map.
 
 ## Non-goals
@@ -27,7 +27,7 @@ src/inventory/project.ts
   toAgentVaultSliceRow(VaultItem) → AgentVaultSliceRow-shaped
 ```
 
-Workbench `stage-map.ts` re-exports for existing import paths (or deleted if all updated).
+Workbench `stage-map.ts` deleted; callers import inventory projectors.
 `intentionToAgentRequest` uses shared projectors for exclusion index + vault slice.
 
 ## Acceptance criteria

@@ -20,7 +20,7 @@ Part of `spec/spec-architecture-deepening-workbench-stage.md`.
 
 ### Acceptance criteria
 
-- [x] `runStageSelection` plans then calls stage port once with pool + selectedIds
+- [x] `runStageSelection` plans then calls stage port once with plan candidates
 - [x] Does not Apply filter (port surface is stage only)
 - [x] `main.stageSelected` uses `runStageSelection`; no multi-hop pool/filter/stage orchestration
 - [x] Filter rewrite applied in main only after successful stage when `selectionFilter !== null` (current product behavior)

@@ -402,7 +402,7 @@ async function stageSelected(): Promise<void> {
       recommendations: agentRecs,
       selectedIds: selectedSnapshot,
     },
-    (pool, ids) => client.stage(pool, ids),
+    (candidates) => client.stage(candidates),
   );
   const out = outcome.stage;
   if (!out.ok) {

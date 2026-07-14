@@ -43,10 +43,8 @@ export type StageSelectionOutcome = StageSelectionPlan & {
   stage: StageSendResult;
 };
 
-export type StagePort = (
-  pool: readonly VaultItem[],
-  selectedIds: ReadonlySet<string>,
-) => Promise<StageSendResult>;
+/** Stage port receives pre-projected candidates (single projection in plan). */
+export type StagePort = (candidates: readonly StageCandidate[]) => Promise<StageSendResult>;
 
 /**
  * Project one agent recommendation to a vault-shaped row.
@@ -64,6 +62,14 @@ export function projectRecToVaultRow(
     if (opts?.includeReason && rec.reason) row.reason = rec.reason;
     return row;
   }
+  return syntheticVaultFromRec(rec, opts);
+}
+
+/** Agent-only row → vault shape (exclusion fields preserved; no vault lookup). */
+export function syntheticVaultFromRec(
+  rec: AgentRecommendation,
+  opts?: { includeReason?: boolean },
+): VaultItem & { reason?: string } {
   const synthetic: VaultItem & { reason?: string } = {
     id: rec.id,
     itemHash: rec.itemHash,
@@ -98,14 +104,13 @@ export function stagePoolFromVaultAndRecs(
   vaultItems: readonly VaultItem[],
   recommendations: readonly AgentRecommendation[],
 ): VaultItem[] {
-  const byId = new Map(vaultItems.map((v) => [v.id, v]));
   const pool: VaultItem[] = [...vaultItems];
   const seen = new Set(vaultItems.map((v) => v.id));
   for (const r of recommendations) {
     if (seen.has(r.id)) continue;
     seen.add(r.id);
-    // includeReason false → pure VaultItem (no display reason)
-    pool.push(projectRecToVaultRow(r, byId));
+    // Agent-only only — vault ids already skipped; no byId map needed.
+    pool.push(syntheticVaultFromRec(r));
   }
   return pool;
 }
@@ -134,7 +139,7 @@ export function planStageSelection(input: StageSelectionInput): StageSelectionPl
 }
 
 /**
- * Full Stage selected transition: plan then stage port once.
+ * Full Stage selected transition: plan then stage port once with candidates.
  * Does not Apply filter to DIM — callers paint Selection filter from the plan after success.
  */
 export async function runStageSelection(
@@ -142,6 +147,6 @@ export async function runStageSelection(
   stage: StagePort,
 ): Promise<StageSelectionOutcome> {
   const plan = planStageSelection(input);
-  const stageResult = await stage(plan.pool, input.selectedIds);
+  const stageResult = await stage(plan.candidates);
   return { ...plan, stage: stageResult };
 }

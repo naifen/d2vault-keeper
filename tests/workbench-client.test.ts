@@ -6,7 +6,7 @@ import {
   createWorkbenchClient,
   type RuntimeSend,
 } from "../src/workbench/client.js";
-import { toStageCandidate, selectedStageCandidates } from "../src/workbench/stage-map.js";
+import { toStageCandidate, selectedStageCandidates } from "../src/inventory/index.js";
 import { emptyTrashState, stageItems } from "../src/trash/index.js";
 import type { VaultItem } from "../src/inventory/index.js";
 import { createEnvelope } from "../src/messaging/index.js";
@@ -66,7 +66,7 @@ describe("toStageCandidate (shipped)", () => {
 });
 
 describe("createWorkbenchClient", () => {
-  it("stage sends selected StageCandidates from shipped mapper", async () => {
+  it("stage sends pre-projected StageCandidates on trash-stage envelope", async () => {
     const send = vi.fn<RuntimeSend>(async (msg) => {
       expect(msg.kind).toBe("trash-stage");
       const candidates = (msg.payload as { candidates: unknown[] }).candidates;
@@ -91,7 +91,8 @@ describe("createWorkbenchClient", () => {
     });
 
     const client = createWorkbenchClient(send);
-    const out = await client.stage([normal, exotic], new Set(["n1"]));
+    const projected = selectedStageCandidates([normal, exotic], new Set(["n1"]));
+    const out = await client.stage(projected);
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.staged).toHaveLength(1);

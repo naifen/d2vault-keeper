@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AgentRecommendation } from "../src/agent/index.js";
 import { createEnvelope } from "../src/messaging/index.js";
 import type { VaultItem } from "../src/inventory/index.js";
+import { selectedStageCandidates, toStageCandidate } from "../src/inventory/index.js";
 import { emptyTrashState, stageItems } from "../src/trash/index.js";
 import { createWorkbenchClient, type RuntimeSend } from "../src/workbench/client.js";
 import { buildSelectionFilter } from "../src/workbench/selection-filter.js";
@@ -16,8 +17,8 @@ import {
   runStageSelection,
   selectionFilterAfterStage,
   stagePoolFromVaultAndRecs,
+  syntheticVaultFromRec,
 } from "../src/workbench/stage-selection.js";
-import { selectedStageCandidates, toStageCandidate } from "../src/workbench/stage-map.js";
 
 const normal: VaultItem = {
   id: "9000000001",
@@ -140,6 +141,20 @@ describe("C2 Rec → Stage exclusion field continuity", () => {
     expect(row.reason).toBe("keep me");
   });
 
+  it("syntheticVaultFromRec preserves exclusion fields without vault map", () => {
+    const rec: AgentRecommendation = {
+      id: "syn-1",
+      itemHash: 8,
+      name: "Syn",
+      isExotic: true,
+      tag: "favorite",
+    };
+    const row = syntheticVaultFromRec(rec);
+    expect(row.isExotic).toBe(true);
+    expect(row.tag).toBe("favorite");
+    expect(row.reason).toBeUndefined();
+  });
+
   it("vault wins over rec fields when ids match", () => {
     const rec: AgentRecommendation = {
       id: normal.id,
@@ -208,16 +223,15 @@ describe("C2 Rec → Stage exclusion field continuity", () => {
 });
 
 describe("runStageSelection", () => {
-  it("calls stage port once with pool + selectedIds; does not Apply filter", async () => {
-    const stage = vi.fn(async (pool: readonly VaultItem[], ids: ReadonlySet<string>) => {
-      const candidates = selectedStageCandidates(pool, ids);
-      const { result, state } = stageItems(emptyTrashState(), candidates);
+  it("calls stage port once with plan candidates; does not Apply filter", async () => {
+    const stage = vi.fn(async (candidates: readonly ReturnType<typeof toStageCandidate>[]) => {
+      const { result, state } = stageItems(emptyTrashState(), [...candidates]);
       return {
         ok: true as const,
         items: state.items,
         staged: result.staged,
         denied: result.denied,
-        candidates,
+        candidates: [...candidates],
       };
     });
     const outcome = await runStageSelection(
@@ -229,7 +243,9 @@ describe("runStageSelection", () => {
       stage,
     );
     expect(stage).toHaveBeenCalledTimes(1);
-    expect(stage.mock.calls[0]?.[0]).toEqual([normal, exotic]);
+    expect(stage.mock.calls[0]?.[0]).toEqual(
+      selectedStageCandidates([normal, exotic], new Set(["9000000001", "9000000002"])),
+    );
     expect(outcome.stage.ok).toBe(true);
     if (!outcome.stage.ok) return;
     expect(outcome.stage.staged.map((s) => s.id)).toEqual(["9000000001"]);
@@ -250,7 +266,7 @@ describe("runStageSelection", () => {
   });
 });
 
-describe("selectionFilterAfterStage (re-export / leaf)", () => {
+describe("selectionFilterAfterStage (leaf)", () => {
   it("matches plan Stage filter rules", () => {
     expect(selectionFilterAfterStage([normal, exotic], new Set(["9000000001", "9000000002"]))).toBe(
       "id:9000000001 or id:9000000002",
@@ -260,7 +276,7 @@ describe("selectionFilterAfterStage (re-export / leaf)", () => {
 });
 
 describe("stagePoolFromVaultAndRecs (leaf)", () => {
-  it("still available for direct callers", () => {
+  it("agent-only rows keep exclusion fields without vault map", () => {
     const pool = stagePoolFromVaultAndRecs([normal], [
       { id: "x", itemHash: 1, name: "X", isExotic: true },
     ]);
@@ -269,7 +285,7 @@ describe("stagePoolFromVaultAndRecs (leaf)", () => {
 });
 
 describe("Stage send path (client + exclusions, no auto-Apply)", () => {
-  it("client.stage Stages under exclusion rules via trash-stage envelope", async () => {
+  it("client.stage Stages pre-projected candidates via trash-stage envelope", async () => {
     const send = vi.fn<RuntimeSend>(async (msg) => {
       expect(msg.kind).toBe("trash-stage");
       const candidates = (msg.payload as { candidates: ReturnType<typeof toStageCandidate>[] })
@@ -283,7 +299,11 @@ describe("Stage send path (client + exclusions, no auto-Apply)", () => {
       });
     });
     const client = createWorkbenchClient(send);
-    const out = await client.stage([normal, exotic], new Set(["9000000001", "9000000002"]));
+    const candidates = selectedStageCandidates(
+      [normal, exotic],
+      new Set(["9000000001", "9000000002"]),
+    );
+    const out = await client.stage(candidates);
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.staged.map((s) => s.id)).toEqual(["9000000001"]);
@@ -297,15 +317,14 @@ describe("Stage send path (client + exclusions, no auto-Apply)", () => {
         recommendations: [],
         selectedIds: new Set(["9000000001"]),
       },
-      async (pool, ids) => {
-        const candidates = selectedStageCandidates(pool, ids);
-        const { result, state } = stageItems(emptyTrashState(), candidates);
+      async (candidates) => {
+        const { result, state } = stageItems(emptyTrashState(), [...candidates]);
         return {
           ok: true as const,
           items: state.items,
           staged: result.staged,
           denied: result.denied,
-          candidates,
+          candidates: [...candidates],
         };
       },
     );

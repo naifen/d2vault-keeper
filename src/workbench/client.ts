@@ -27,7 +27,6 @@ import {
   type AgentResult,
 } from "../agent/index.js";
 import type { AgentSettingsResultPayload } from "../messaging/types.js";
-import { selectedStageCandidates } from "../inventory/project.js";
 
 export type RuntimeSend = (message: Envelope) => Promise<unknown>;
 
@@ -40,9 +39,9 @@ export interface WorkbenchClient {
   roundTrip(token: string): Promise<ClientResult<{ hops: string[]; token: string }>>;
   loadVault(): Promise<ClientResult<{ status: InventoryStatus; items: VaultItem[] }>>;
   loadTrash(): Promise<ClientResult<{ items: TrashRecord[]; state: TrashState }>>;
+  /** Stage pre-projected candidates (projection lives in planStageSelection / inventory). */
   stage(
-    vaultItems: readonly VaultItem[],
-    selectedIds: ReadonlySet<string>,
+    candidates: readonly StageCandidate[],
   ): Promise<
     ClientResult<{
       items: TrashRecord[];
@@ -140,14 +139,15 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
       }
     },
 
-    async stage(vaultItems, selectedIds) {
-      const candidates = selectedStageCandidates(vaultItems, selectedIds);
+    async stage(candidates) {
       if (candidates.length === 0) {
         return bad("Select vault items to stage");
       }
+      // Mutable copy for envelope payload + result echo (callers may pass readonly).
+      const sent = [...candidates];
       try {
         const res = await send(
-          createTypedEnvelope("trash-stage", newRequestId(), { candidates }),
+          createTypedEnvelope("trash-stage", newRequestId(), { candidates: sent }),
         );
         if (!isEnvelope(res) || res.kind !== "trash-result") {
           return bad("Stage failed");
@@ -161,7 +161,7 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
           items,
           staged: payload?.result?.staged ?? [],
           denied: payload?.result?.denied ?? [],
-          candidates,
+          candidates: sent,
         };
       } catch (err) {
         return bad(String(err));

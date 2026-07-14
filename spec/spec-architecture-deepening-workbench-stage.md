@@ -2,7 +2,7 @@
 
 ## Problem Statement
 
-Stage selected (composer-first Selection filter rewrite, no auto-Apply) spans five modules (`main` → shell-state pool/filter → selection-filter → client.stage → stage-map). Tests assert call order by grepping `main.ts`. Agent-only synthetic rec rows drop `isExotic`/`tag`/`tierType`, so Stage can accept items Recs meant to protect even though exclusion *policy* is already deep.
+Stage selected (composer-first Selection filter rewrite, no auto-Apply) is owned by `stage-selection` (plan + port) with inventory projectors and thin `client.stage(candidates)`. Agent-only synthetic rec rows preserve `isExotic`/`tag`/`tierType` so Stage denials still fire.
 
 ## Goals
 
@@ -42,11 +42,11 @@ Internal (hidden):
 ### Main adapter
 
 ```
-const out = await runStageSelection({ vault, recs, selectedIds }, (pool, ids) => client.stage(pool, ids));
+const out = await runStageSelection({ vault, recs, selectedIds }, (candidates) => client.stage(candidates));
 // paint filter rewrite if selectionFilter !== null; paint trash/results; clear selection
 ```
 
-Does **not** call `applyFilter`.
+Does **not** call `applyFilter`. Projection is single-shot in the plan; client does not re-project.
 
 ## Acceptance criteria
 
@@ -60,7 +60,7 @@ Does **not** call `applyFilter`.
 
 ### Ticket C1-T2 — runStageSelection + thin main
 
-- [x] `runStageSelection` plans then calls stage port once with pool + selectedIds
+- [x] `runStageSelection` plans then calls stage port once with plan candidates
 - [x] Does not Apply filter (port surface is stage only)
 - [x] `main.stageSelected` uses `runStageSelection`; no multi-hop pool/filter/stage orchestration
 - [x] On stage failure, returns error for paint; does not clear selection rewrite incorrectly (filter rewrite only when plan has non-null filter and stage ok — match current product: rewrite after successful stage)

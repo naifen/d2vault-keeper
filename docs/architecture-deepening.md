@@ -12,7 +12,7 @@ Source reviews:
 | C1 Stage selected shell | **done** | `planStageSelection` / `runStageSelection` in `src/workbench/stage-selection.ts`; main paints |
 | C2 Rec → Stage exclusion continuity | **done** | `projectRecToVaultRow` preserves ExclusionSubject on agent-only rows |
 | C3 Agent session use-case | **done** | `createAgentSession` in `src/agent/session.ts`; thin `agent-handlers` |
-| C4 Vault projection seam | **done** | `src/inventory/project.ts`; stage-map re-exports; agent uses shared projectors |
+| C4 Vault projection seam | **done** | `src/inventory/project.ts`; stage-map deleted; agent uses shared projectors |
 | C5 Workbench shell model | **done (focused)** | `planAfterSuggest` only — not full DOM extract; Suggest greps replaced |
 | C6 Hub + Light factories | **deferred** | Pure switch move fails deletion test; product rules already in StageMirror / AgentSession / LightRelay |
 
@@ -41,7 +41,7 @@ Source reviews:
 ```
 Workbench main (paint / a11y)
   → planAfterSuggest (Suggest fill + tab)
-  → runStageSelection (pool · filter · candidates · stage port)
+  → runStageSelection (pool · filter · candidates → stage port)
   → createWorkbenchClient → envelopes
 Background hub (composition root — switch stays)
   → createLightRelay (vault/filter/mirror multi-tab)

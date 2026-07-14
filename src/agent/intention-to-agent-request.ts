@@ -10,11 +10,7 @@ import {
   toAgentVaultSliceRow,
   type VaultProjectSource,
 } from "../inventory/project.js";
-import type {
-  AgentExclusionFields,
-  AgentRequest,
-  AgentVaultSliceRow,
-} from "./types.js";
+import type { AgentRequest, AgentVaultSliceRow } from "./types.js";
 
 export const DEFAULT_VAULT_SLICE_LIMIT = 200;
 
@@ -39,9 +35,7 @@ export interface IntentionToAgentRequestInput {
  */
 export function intentionToAgentRequest(input: IntentionToAgentRequestInput): AgentRequest {
   const items = input.vaultItems ?? [];
-  const exclusionById = exclusionByIdFromVault(items) as
-    | Record<string, AgentExclusionFields>
-    | undefined;
+  const exclusionById = exclusionByIdFromVault(items);
   const req: AgentRequest = {
     intention: input.intention,
     vaultContextOptIn: input.vaultContextOptIn,
@@ -53,9 +47,9 @@ export function intentionToAgentRequest(input: IntentionToAgentRequestInput): Ag
   }
 
   const limit = input.vaultSliceLimit ?? DEFAULT_VAULT_SLICE_LIMIT;
-  const vaultSlice = items
+  const vaultSlice: AgentVaultSliceRow[] = items
     .slice(0, Math.max(0, limit))
-    .map((v) => toAgentVaultSliceRow(v) as AgentVaultSliceRow);
+    .map((v) => toAgentVaultSliceRow(v));
   if (vaultSlice.length > 0) {
     req.vaultSlice = vaultSlice;
   }
