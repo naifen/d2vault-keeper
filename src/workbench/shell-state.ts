@@ -69,3 +69,27 @@ export function recRowsFromAgent(
   }
   return rows;
 }
+
+/**
+ * Stage candidate pool: full vault plus agent-only rec ids (vault wins on id).
+ * Display reasons are not needed for Stage — only identity + StageCandidate fields.
+ */
+export function stagePoolFromVaultAndRecs(
+  vaultItems: readonly VaultItem[],
+  recommendations: readonly AgentRecommendation[],
+): VaultItem[] {
+  const pool: VaultItem[] = [...vaultItems];
+  const seen = new Set(vaultItems.map((v) => v.id));
+  for (const r of recommendations) {
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    pool.push({
+      id: r.id,
+      itemHash: r.itemHash,
+      quantity: 1,
+      bucketHash: 0,
+      name: r.name,
+    });
+  }
+  return pool;
+}

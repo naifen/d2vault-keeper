@@ -157,4 +157,24 @@ describe("createWorkbenchClient", () => {
     if (out.ok) return;
     expect(out.error).toBe("Mirror bridge unavailable");
   });
+
+  it("loadSettings reads hasKey; rejects ok payload without settings", async () => {
+    const withKey: RuntimeSend = async (msg) =>
+      createEnvelope("agent-settings-result", msg.requestId, {
+        ok: true,
+        settings: { apiKey: "", baseUrl: "", model: "", hasKey: true },
+      });
+    const client = createWorkbenchClient(withKey);
+    const ok = await client.loadSettings();
+    expect(ok).toEqual({ ok: true, hasKey: true });
+
+    const missingSettings: RuntimeSend = async (msg) =>
+      createEnvelope("agent-settings-result", msg.requestId, {
+        ok: true,
+      } as { ok: true });
+    const bad = await createWorkbenchClient(missingSettings).loadSettings();
+    expect(bad.ok).toBe(false);
+    if (bad.ok) return;
+    expect(bad.error).toMatch(/settings/i);
+  });
 });

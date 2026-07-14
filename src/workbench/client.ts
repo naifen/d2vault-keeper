@@ -268,10 +268,10 @@ export function createWorkbenchClient(send: RuntimeSend): WorkbenchClient {
           return bad("Failed to load settings");
         }
         const payload = res.payload as AgentSettingsResultPayload | undefined;
-        if (!payload?.ok) return bad("Failed to load settings");
+        if (!payload?.ok || !payload.settings) return bad("Failed to load settings");
+        const settings = payload.settings;
         const hasKey = Boolean(
-          payload.settings.hasKey ||
-            (payload.settings.apiKey && payload.settings.apiKey !== ""),
+          settings.hasKey || (settings.apiKey && settings.apiKey !== ""),
         );
         return { ok: true, hasKey };
       } catch (err) {

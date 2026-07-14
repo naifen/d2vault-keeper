@@ -5,7 +5,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   selectionFilterAfterStage,
+  stagePoolFromVaultAndRecs,
 } from "../src/workbench/shell-state.js";
+import type { AgentRecommendation } from "../src/agent/index.js";
 import { buildSelectionFilter } from "../src/workbench/selection-filter.js";
 import { selectedStageCandidates, toStageCandidate } from "../src/workbench/stage-map.js";
 import { createWorkbenchClient, type RuntimeSend } from "../src/workbench/client.js";
@@ -80,6 +82,29 @@ describe("selectionFilterAfterStage (Workbench seam)", () => {
   });
 });
 
+describe("stagePoolFromVaultAndRecs (Workbench seam)", () => {
+  it("merges vault with agent-only rec ids; vault wins on id collision", () => {
+    const recOnly: AgentRecommendation = {
+      id: "rec-only-1",
+      itemHash: 99,
+      name: "Synthetic Rec",
+      reason: "agent pick",
+    };
+    const vaultDup: AgentRecommendation = {
+      id: normal.id,
+      itemHash: normal.itemHash,
+      name: "Should not replace vault",
+    };
+    const pool = stagePoolFromVaultAndRecs([normal], [recOnly, vaultDup]);
+    expect(pool).toHaveLength(2);
+    expect(pool[0]).toBe(normal);
+    expect(pool[1]?.id).toBe("rec-only-1");
+    expect(pool[1]?.name).toBe("Synthetic Rec");
+    // Stage pool is identity-only — does not carry display reason from recs
+    expect((pool[1] as { reason?: string }).reason).toBeUndefined();
+  });
+});
+
 describe("Stage selected DOM adapter wiring", () => {
   it("stageSelected rewrites filter via selectionFilterAfterStage and does not call applyFilter", () => {
     const stageStart = main.indexOf("async function stageSelected");
@@ -87,6 +112,7 @@ describe("Stage selected DOM adapter wiring", () => {
     expect(stageStart).toBeGreaterThan(-1);
     const body = main.slice(stageStart, stageEnd);
     expect(body).toMatch(/selectionFilterAfterStage/);
+    expect(body).toMatch(/stagePoolFromVaultAndRecs/);
     expect(body).not.toMatch(/applyFilter\(/);
     expect(body).not.toMatch(/client\.applyFilter/);
     expect(body).toMatch(/filterInput\.value = filterRewrite/);

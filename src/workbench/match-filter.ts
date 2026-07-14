@@ -62,13 +62,14 @@ function itemMatchesAtom(item: VaultItem, atom: string): boolean {
       // exotic handled above; empty kind ignore
       return true;
     }
+    // Compact type+name so "Hand Cannon" matches DIM token handcannon.
     const hay = `${item.itemType ?? ""} ${item.name}`.toLowerCase().replace(/[^a-z0-9]+/g, "");
-    // DIM-style compact tokens: handcannon vs "Hand Cannon"
     const hit =
       hay.includes(kind) ||
-      hay.includes(kind.replace(/cannon$/, "cannon")) ||
-      // common aliases
-      (kind === "weapon" && /weapon|cannon|rifle|shotgun|bow|sword|glaive|sidearm|smg|machinegun|lmg|sniper|fusion|trace|grenade|rocket|linear/.test(hay)) ||
+      (kind === "weapon" &&
+        /weapon|cannon|rifle|shotgun|bow|sword|glaive|sidearm|smg|machinegun|lmg|sniper|fusion|trace|grenade|rocket|linear/.test(
+          hay,
+        )) ||
       (kind === "armor" && /armor|helmet|gauntlet|chest|leg|classitem|cloak|bond|mark/.test(hay));
     return neg ? !hit : hit;
   }
@@ -91,9 +92,15 @@ function itemMatchesGroup(item: VaultItem, group: string): boolean {
   return atoms.every((a) => itemMatchesAtom(item, a));
 }
 
+/** True when query is only `id:…` terms OR-joined (Selection filter shape). */
+function isIdOnlyQuery(query: string): boolean {
+  return /^\s*id:[^\s|)]+(?:\s+or\s+id:[^\s|)]+)*\s*$/i.test(query);
+}
+
 /**
  * Filter vault items by DIM-ish query for Matches tab.
  * Empty / whitespace query → all items (vault browse).
+ * Pure Selection filters (`id:a or id:b`) use extractIdTerms Set membership.
  */
 export function matchVaultItems(
   items: readonly VaultItem[],
@@ -101,6 +108,13 @@ export function matchVaultItems(
 ): VaultItem[] {
   const q = query.trim();
   if (!q) return [...items];
+
+  // Selection filter fast path — exact instance ids, no atom parse.
+  if (isIdOnlyQuery(q)) {
+    const ids = new Set(extractIdTerms(q));
+    if (ids.size === 0) return [];
+    return items.filter((item) => ids.has(item.id));
+  }
 
   // Split top-level OR groups (DIM uses " or ")
   const groups = q.split(/\s+or\s+/i).map((g) => g.trim()).filter(Boolean);

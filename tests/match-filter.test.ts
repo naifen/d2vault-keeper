@@ -64,6 +64,16 @@ describe("matchVaultItems", () => {
     ).toEqual(["9000000001", "9000000002"]);
   });
 
+  it("id-only Selection filter uses extractIdTerms set membership (order independent)", () => {
+    const hit = matchVaultItems(items, "id:9000000002 or id:9000000001");
+    expect(hit.map((i) => i.id).sort()).toEqual(["9000000001", "9000000002"]);
+    // extractIdTerms is the source of ids for the pure-id path
+    expect(extractIdTerms("id:9000000002 or id:9000000001")).toEqual([
+      "9000000002",
+      "9000000001",
+    ]);
+  });
+
   it("is:handcannon -is:exotic keeps legendary hand cannons only", () => {
     expect(matchVaultItems(items, "is:handcannon -is:exotic").map((i) => i.id)).toEqual([
       "9000000001",

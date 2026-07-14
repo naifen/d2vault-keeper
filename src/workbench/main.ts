@@ -18,6 +18,7 @@ import {
   recRowsFromAgent,
   resultsTabAfterSuggest,
   selectionFilterAfterStage,
+  stagePoolFromVaultAndRecs,
   type ResultsTab,
 } from "./shell-state.js";
 import { matchVaultItems } from "./match-filter.js";
@@ -130,8 +131,6 @@ function updateSuggestGating(): void {
 
 function openSettings(): void {
   if (settingsScrim) settingsScrim.hidden = false;
-  // Prefer focusing first field; keep gear as restore target via data attr.
-  if (btnSettings) btnSettings.setAttribute("data-settings-opener", "1");
   apiKeyInput?.focus();
 }
 
@@ -163,8 +162,7 @@ function currentResultRows(): Array<VaultItem & { reason?: string }> {
   return matchVaultItems(vaultItems, filterInput?.value ?? "");
 }
 
-function rowTitle(item: VaultItem & { reason?: string }): string {
-  const perkLine = formatPerkHoverLine(item.perks);
+function rowTitle(item: VaultItem & { reason?: string }, perkLine: string): string {
   const bits = [item.name, perkLine];
   if (item.reason) bits.push(item.reason);
   bits.push(item.id);
@@ -226,10 +224,11 @@ function renderResultsList(): void {
     row.setAttribute("role", "listitem");
     row.dataset.id = item.id;
     row.tabIndex = 0;
-    const title = rowTitle(item);
+    const perkLine = formatPerkHoverLine(item.perks);
+    const title = rowTitle(item, perkLine);
     row.title = title;
     row.setAttribute("aria-label", title);
-    row.setAttribute("aria-description", formatPerkHoverLine(item.perks));
+    row.setAttribute("aria-description", perkLine);
 
     const check = document.createElement("input");
     check.type = "checkbox";
@@ -258,7 +257,7 @@ function renderResultsList(): void {
 
     const perkTip = document.createElement("span");
     perkTip.className = "vault-row-perks";
-    perkTip.textContent = formatPerkHoverLine(item.perks);
+    perkTip.textContent = perkLine;
     perkTip.setAttribute("aria-hidden", "true");
 
     row.append(check, name, meta, perkTip);
@@ -403,14 +402,7 @@ async function stageSelected(): Promise<void> {
   // Snapshot selection for Selection filter rewrite before clear.
   const selectedSnapshot = new Set(selectedVaultIds);
   // Include Recs rows (vault-backed + agent-only) so synthetic recs can Stage by id.
-  const stagePool: VaultItem[] = [...vaultItems];
-  const seen = new Set(vaultItems.map((v) => v.id));
-  for (const row of recRowsFromAgent(agentRecs, vaultItems)) {
-    if (!seen.has(row.id)) {
-      stagePool.push(row);
-      seen.add(row.id);
-    }
-  }
+  const stagePool = stagePoolFromVaultAndRecs(vaultItems, agentRecs);
   const filterRewrite = selectionFilterAfterStage(stagePool, selectedSnapshot);
 
   // No confirmation modal — Stage is intentional and reversible via Unstage.
@@ -583,7 +575,8 @@ async function init(): Promise<void> {
     void copyFilter();
   });
   filterInput?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    // Ignore IME composition Enter (keyCode 229) so CJK confirm does not Apply.
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
       e.preventDefault();
       void applyFilter();
     }
@@ -592,9 +585,9 @@ async function init(): Promise<void> {
   filterInput?.addEventListener("input", () => {
     if (resultsTab === "matches") renderResultsList();
   });
-  // Enter Suggests; Shift+Enter newline
+  // Enter Suggests; Shift+Enter newline (skip IME composition confirm).
   intentionInput?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
       e.preventDefault();
       void runSuggest();
     }

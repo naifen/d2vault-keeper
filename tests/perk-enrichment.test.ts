@@ -70,7 +70,10 @@ const manifestWithPlugs = {
 };
 
 function profileWithSockets(
-  sockets: Record<string, { sockets: Array<{ plugHash?: number; isEnabled?: boolean }> }>,
+  sockets: Record<
+    string,
+    { sockets: Array<{ plugHash?: number; isEnabled?: boolean; isVisible?: boolean }> }
+  >,
 ): DestinyProfileResponseLike {
   return {
     ...baseItems,
@@ -97,6 +100,19 @@ describe("plugHashesFromProfile", () => {
     });
     const map = plugHashesFromProfile(profile);
     expect(map.get("inst-full")).toEqual([5001, 5002]);
+  });
+
+  it("skips plugs with isVisible === false (hidden sockets are not perks)", () => {
+    const profile = profileWithSockets({
+      "inst-full": {
+        sockets: [
+          { plugHash: 5001, isEnabled: true, isVisible: true },
+          { plugHash: 5002, isEnabled: true, isVisible: false },
+          { plugHash: 5003, isEnabled: true }, // omitted visibility → keep
+        ],
+      },
+    });
+    expect(plugHashesFromProfile(profile).get("inst-full")).toEqual([5001, 5003]);
   });
 });
 

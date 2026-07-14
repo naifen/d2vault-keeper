@@ -116,8 +116,9 @@ export function plugHashesFromProfile(
       if (typeof plugHash !== "number" || !Number.isFinite(plugHash) || plugHash <= 0) {
         continue;
       }
-      // Prefer enabled plugs; if isEnabled is omitted, still take the hash (partial caches).
-      if (sock.isEnabled === false) continue;
+      // Prefer enabled+visible plugs; omitted flags still take the hash (partial caches).
+      // isVisible === false hides trackers/inactive sockets that are not real perks.
+      if (sock.isEnabled === false || sock.isVisible === false) continue;
       hashes.push(plugHash);
     }
     if (hashes.length > 0) map.set(instanceId, hashes);

@@ -126,4 +126,17 @@ describe("Suggest shell policy (pure)", () => {
     expect(body).not.toMatch(/client\.applyFilter/);
     expect(body).not.toMatch(/client\.stage\(/);
   });
+
+  it("Enter handlers ignore IME composition (filter Apply + intention Suggest)", () => {
+    expect(main).toMatch(/isComposing/);
+    // Both product Enter paths must consult composition state before acting.
+    const filterKey = main.indexOf('filterInput?.addEventListener("keydown"');
+    const intentionKey = main.indexOf('intentionInput?.addEventListener("keydown"');
+    expect(filterKey).toBeGreaterThan(-1);
+    expect(intentionKey).toBeGreaterThan(-1);
+    const filterBody = main.slice(filterKey, filterKey + 280);
+    const intentionBody = main.slice(intentionKey, intentionKey + 280);
+    expect(filterBody).toMatch(/isComposing/);
+    expect(intentionBody).toMatch(/isComposing/);
+  });
 });
