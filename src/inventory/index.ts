@@ -41,3 +41,11 @@ export {
   type TagByItemId,
   type PlugHashesByItemId,
 } from "./enrichment.js";
+export {
+  toStageCandidate,
+  selectedStageCandidates,
+  toExclusionFields,
+  toAgentVaultSliceRow,
+  exclusionByIdFromVault,
+  type VaultProjectSource,
+} from "./project.js";

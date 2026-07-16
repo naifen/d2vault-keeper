@@ -11,7 +11,7 @@ import {
   DIM_API_PROFILE_KEY,
 } from "../src/inventory/index.js";
 import { emptyTrashState, stageItems } from "../src/trash/index.js";
-import { toStageCandidate } from "../src/workbench/stage-map.js";
+import { toStageCandidate } from "../src/inventory/index.js";
 import type { DestinyProfileResponseLike } from "../src/inventory/types.js";
 
 const profile: DestinyProfileResponseLike = {

@@ -1,8 +1,10 @@
+/**
+ * Agent envelope adapter — thin pack/unpack over AgentSession.
+ * Product rules (cancel slot, key mask) live in createAgentSession.
+ */
+
 import {
-  createAgentController,
-  loadAgentSettings,
-  runAgent,
-  saveAgentSettings,
+  createAgentSession,
   type AgentRequest,
   type AgentSettings,
   type FetchFn,
@@ -22,19 +24,16 @@ function storageLocal(): KvStorage {
   };
 }
 
-let activeCancel: (() => void) | null = null;
+/** Process-wide session (background event page / service worker). */
+const session = createAgentSession({
+  getStorage: storageLocal,
+});
 
 export async function handleAgentSettingsGet(requestId: string): Promise<Envelope> {
-  const settings = await loadAgentSettings(storageLocal());
-  // Never put raw key into logs; response to Workbench is intentional storage UX.
+  const settings = await session.getSettings();
   return createEnvelope("agent-settings-result", requestId, {
     ok: true,
-    settings: {
-      ...settings,
-      // Mask in transit display default — Workbench can still save new key.
-      apiKey: settings.apiKey ? "••••••••" : "",
-      hasKey: Boolean(settings.apiKey),
-    },
+    settings,
   });
 }
 
@@ -42,34 +41,11 @@ export async function handleAgentSettingsSet(
   requestId: string,
   partial: Partial<AgentSettings> & { apiKey?: string },
 ): Promise<Envelope> {
-  const current = await loadAgentSettings(storageLocal());
-  const incomingKey = partial.apiKey;
-  const next: AgentSettings = {
-    apiKey:
-      typeof incomingKey === "string" &&
-      incomingKey.trim() !== "" &&
-      incomingKey !== "••••••••"
-        ? incomingKey
-        : current.apiKey,
-    baseUrl: partial.baseUrl?.trim() || current.baseUrl,
-    model: partial.model?.trim() || current.model,
-  };
-  await saveAgentSettings(storageLocal(), next);
+  const settings = await session.setSettings(partial);
   return createEnvelope("agent-settings-result", requestId, {
     ok: true,
-    settings: {
-      ...next,
-      apiKey: next.apiKey ? "••••••••" : "",
-      hasKey: Boolean(next.apiKey),
-    },
+    settings,
   });
-}
-
-function isAbortError(err: unknown): boolean {
-  return (
-    (err instanceof Error && err.name === "AbortError") ||
-    (typeof DOMException !== "undefined" && err instanceof DOMException && err.name === "AbortError")
-  );
 }
 
 export async function handleAgentRun(
@@ -78,52 +54,23 @@ export async function handleAgentRun(
   /** Test seam: inject fetch (production uses global fetch). */
   fetchFn?: FetchFn,
 ): Promise<Envelope> {
-  if (activeCancel) {
-    activeCancel();
-    activeCancel = null;
+  const outcome = await session.run(request, fetchFn ? { fetchFn } : undefined);
+  if (outcome.ok) {
+    return createEnvelope("agent-result", requestId, { ok: true, result: outcome.result });
   }
-  // Register cancel before any await so Cancel during settings load still aborts this run.
-  const ctrl = createAgentController();
-  activeCancel = ctrl.cancel;
-  try {
-    const settings = await loadAgentSettings(storageLocal());
-    if (ctrl.signal.aborted) {
-      return createEnvelope("agent-result", requestId, {
-        ok: false,
-        cancelled: true,
-        error: "cancelled",
-      });
-    }
-    const result = await runAgent({
-      settings,
-      request,
-      signal: ctrl.signal,
-      ...(fetchFn ? { fetchFn } : {}),
-    });
-    return createEnvelope("agent-result", requestId, { ok: true, result });
-  } catch (err) {
-    const aborted = isAbortError(err);
-    return createEnvelope("agent-result", requestId, {
-      ok: false,
-      cancelled: aborted,
-      error: aborted ? "cancelled" : err instanceof Error ? err.message : String(err),
-    });
-  } finally {
-    // Only clear if we still own the slot — a newer run must keep its cancel handle.
-    if (activeCancel === ctrl.cancel) {
-      activeCancel = null;
-    }
-  }
+  return createEnvelope("agent-result", requestId, {
+    ok: false,
+    cancelled: outcome.cancelled,
+    error: outcome.error,
+  });
 }
 
 export function handleAgentCancel(requestId: string): Envelope {
-  if (activeCancel) {
-    activeCancel();
-    activeCancel = null;
-  }
+  session.cancel();
   return createEnvelope("agent-result", requestId, {
     ok: false,
     cancelled: true,
     error: "cancelled",
   });
 }
+

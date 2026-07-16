@@ -35,3 +35,14 @@ export {
   redactSettings,
   type KvStorage,
 } from "./settings.js";
+export {
+  createAgentSession,
+  API_KEY_MASK,
+  isApiKeyMask,
+  maskApiKeyForTransit,
+  resolveApiKeyUpdate,
+  type AgentSession,
+  type AgentSessionPorts,
+  type AgentRunOutcome,
+  type PublicAgentSettings,
+} from "./session.js";
